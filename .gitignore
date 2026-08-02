@@ -41,3 +41,9 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# NOTE: `vercel link` appends its own `.vercel` and `.env*` rules here.
+# Both are already covered above, and a trailing `.env*` would override the
+# `!.env.example` negation (git applies the last matching rule), so the
+# duplicates are removed deliberately. If you re-run `vercel link`, check
+# this file again.
