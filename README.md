@@ -4,6 +4,27 @@ Executive dashboard tracking the **RM20,000,000 capital raise (deadline 30 Novem
 
 Live on Supabase: email + password sign-in, per-module access enforced in the database, add/edit forms, and private document storage.
 
+**Production:** <https://mcn-asset-hq.vercel.app>
+
+---
+
+## Deployment
+
+Hosted on Vercel, connected to this GitHub repo — pushing to `main` deploys automatically.
+
+Two environment variables must be set in the Vercel project (Production, Preview and Development): `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`. They are not in the repo.
+
+Two settings that are easy to get wrong:
+
+- **Framework preset must be `Next.js`.** Creating the project with `vercel project add` leaves it unset, and the build then succeeds while every route returns 404 — Vercel runs `next build` but serves the output as plain static files.
+- **Deployment Protection is off.** With Vercel Authentication on, visitors must sign into Vercel *before* reaching the login page, which locks out every CIO. Access control is Supabase auth plus row level security.
+
+Manual deploy:
+
+```bash
+vercel deploy --prod --scope mcnasset-vks-projects
+```
+
 ---
 
 ## Run it
