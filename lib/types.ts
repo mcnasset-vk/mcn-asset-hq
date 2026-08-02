@@ -12,8 +12,11 @@
  */
 export type Role = "super_admin" | "cio" | "pending";
 
-/** The three business lines. A CIO is scoped to exactly one of these. */
-export type ModuleKey = "factory" | "mdna" | "nasdaq";
+/**
+ * The scopes a CIO can hold. The first three are business lines; the fourth
+ * is the introducer payment run, which sees the commission ledger only.
+ */
+export type ModuleKey = "factory" | "mdna" | "nasdaq" | "commissions";
 
 export interface UserProfile {
   id: string;

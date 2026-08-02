@@ -45,12 +45,14 @@ export const MODULE_LABELS: Record<ModuleKey, string> = {
   factory: "Factory Cosif",
   mdna: "MDNA Senior Co-Living",
   nasdaq: "Nasdaq Listing M&A",
+  commissions: "Introducer Commissions",
 };
 
 export const MODULE_HREF: Record<ModuleKey, string> = {
   factory: "/factory",
   mdna: "/mdna",
   nasdaq: "/nasdaq",
+  commissions: "/commissions",
 };
 
 /** Pipeline stages in order. `FactoryFunnel` and `stageRank` both read this. */

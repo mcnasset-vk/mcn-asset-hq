@@ -9,13 +9,12 @@ export function ModuleGuard({
   module,
   children,
 }: {
-  module: ModuleKey | "commissions";
+  module: ModuleKey;
   children: React.ReactNode;
 }) {
-  const { canView, isSuperAdmin } = useDashboard();
+  const { canView } = useDashboard();
 
-  const allowed =
-    module === "commissions" ? isSuperAdmin : canView(module);
+  const allowed = canView(module);
 
   return allowed ? <>{children}</> : <Restricted />;
 }

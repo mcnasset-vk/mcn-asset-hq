@@ -62,8 +62,7 @@ const NAV: NavItem[] = [
     label: "Commissions",
     short: "Fees",
     icon: IconReceipt,
-    module: null,
-    superAdminOnly: true,
+    module: "commissions",
   },
 ];
 

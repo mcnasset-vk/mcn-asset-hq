@@ -66,10 +66,7 @@ export async function getDashboardData(): Promise<DashboardData> {
       supabase.from("factory_deals").select("*").order("submitted_at"),
       supabase.from("mdna_members").select("*").order("member_name"),
       supabase.from("nasdaq_companies").select("*").order("company_name"),
-      supabase
-        .from("commissions")
-        .select("*, factory_deals(company_name)")
-        .order("due_at"),
+      supabase.from("commissions").select("*").order("due_at"),
       supabase.from("documents").select("*").order("uploaded_at"),
     ]);
 
@@ -208,11 +205,10 @@ function mapCommission(
   docs: Map<string, DocumentRef[]>,
 ): Commission {
   const id = row.id as string;
-  const joined = row.factory_deals as { company_name?: string } | null;
   return {
     id,
     factoryDealId: row.factory_deal_id as string,
-    factoryName: joined?.company_name ?? "—",
+    factoryName: (row.factory_name as string) || "—",
     introducerName: row.introducer_name as string,
     introducerPhone: row.introducer_phone as string,
     trigger: row.trigger_event as Commission["trigger"],

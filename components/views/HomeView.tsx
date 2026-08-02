@@ -5,6 +5,7 @@ import { useDashboard } from "@/components/providers/DashboardProvider";
 import { ExecutiveView } from "./ExecutiveView";
 import { FactoryView } from "./FactoryView";
 import { MdnaView } from "./MdnaView";
+import { CommissionsView } from "./CommissionsView";
 import { NasdaqView } from "./NasdaqView";
 
 /**
@@ -23,6 +24,8 @@ export function HomeView() {
       return <MdnaView />;
     case "nasdaq":
       return <NasdaqView />;
+    case "commissions":
+      return <CommissionsView />;
     default:
       return <ExecutiveView />;
   }
