@@ -9,6 +9,7 @@ import {
   IconDashboard,
   IconFactory,
   IconReceipt,
+  IconSteps,
   IconTrending,
   IconUsers,
 } from "@/components/ui/icons";
@@ -63,6 +64,16 @@ const NAV: NavItem[] = [
     short: "Fees",
     icon: IconReceipt,
     module: "commissions",
+  },
+  {
+    // 成交资本7步. Scored across every module at once, so a CIO reading it
+    // through their own row filter would see a misleading index.
+    href: "/seven-steps",
+    label: "7 Steps to Capital",
+    short: "7 Steps",
+    icon: IconSteps,
+    module: null,
+    superAdminOnly: true,
   },
 ];
 

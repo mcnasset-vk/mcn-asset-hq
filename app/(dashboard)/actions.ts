@@ -165,6 +165,35 @@ export async function setCommissionPaid(
   return { ok: true };
 }
 
+/**
+ * The plan against one of the 成交资本7步 steps — owner, next action, target
+ * date. Deliberately cannot write a score: a step's standing is computed from
+ * the pipeline in `metrics.ts`, so there is nothing here to talk it up with.
+ * The seven rows are seeded by migration, so this only ever updates.
+ */
+export async function saveCapitalStep(
+  _prev: FormState,
+  formData: FormData,
+): Promise<FormState> {
+  const key = str(formData.get("key"));
+  if (!key) return { error: "Which step is this? No step was identified." };
+
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("capital_steps")
+    .update({
+      owner_name: str(formData.get("owner_name")),
+      focus: str(formData.get("focus")),
+      target_date: orNull(formData.get("target_date")),
+      notes: orNull(formData.get("notes")),
+    })
+    .eq("key", key);
+
+  if (error) return { error: describe(error.message) };
+  refresh();
+  return { ok: true };
+}
+
 /** Turn Postgres errors into something an executive can act on. */
 function describe(message: string): string {
   if (/row-level security/i.test(message)) {

@@ -9,6 +9,7 @@ import { GapCloser } from "@/components/dashboard/GapCloser";
 import { KpiCard } from "@/components/dashboard/KpiCard";
 import { MdnaPanel } from "@/components/dashboard/MdnaPanel";
 import { NasdaqPanel } from "@/components/dashboard/NasdaqPanel";
+import { SevenStepsPanel } from "@/components/dashboard/SevenStepsPanel";
 import { useDrillDown } from "@/components/drilldown/DrillDownProvider";
 import { PageHeader } from "@/components/layout/PageHeader";
 import {
@@ -20,6 +21,7 @@ import {
 } from "@/lib/drilldowns";
 import { formatDate, formatRM } from "@/lib/format";
 import {
+  getCapitalReadiness,
   getCapitalSummary,
   getCapitalTrend,
   getCommissionSummary,
@@ -46,6 +48,7 @@ export function ExecutiveView() {
   const nasdaq = getNasdaqSummary(data);
   const commissions = getCommissionSummary(data, now);
   const trend = getCapitalTrend(data, now);
+  const readiness = getCapitalReadiness(data, now);
 
   const openDeals =
     stages
@@ -115,6 +118,12 @@ export function ExecutiveView() {
 
       <div className="mt-4">
         <GapCloser gap={gap} capital={capital} />
+      </div>
+
+      {/* The gap above is the money. This is whether the enterprise behind it
+          is in a state where that money can be closed. */}
+      <div className="mt-4">
+        <SevenStepsPanel readiness={readiness} />
       </div>
 
       <div className="mt-4 grid items-start gap-4 xl:grid-cols-2">

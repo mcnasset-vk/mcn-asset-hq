@@ -1,4 +1,9 @@
-import { FACTORY_STAGES, MDNA_STATUSES, NASDAQ_STATUSES } from "./constants";
+import {
+  CAPITAL_STEPS,
+  FACTORY_STAGES,
+  MDNA_STATUSES,
+  NASDAQ_STATUSES,
+} from "./constants";
 import {
   commissionRows,
   factoryRows,
@@ -12,6 +17,7 @@ import {
 } from "./metrics";
 import type { DashboardData } from "./data";
 import type {
+  CapitalStepKey,
   DrillDownContent,
   DrillRow,
   FactoryStage,
@@ -261,6 +267,107 @@ export function commissionDrill(
     amountHeader: "Commission (RM)",
     rows,
   };
+}
+
+/* -------------------------------------------------------------------------- */
+/* 成交资本7步 — every step opens the records that scored it                    */
+/* -------------------------------------------------------------------------- */
+
+export function capitalStepDrill(
+  data: DashboardData,
+  key: CapitalStepKey,
+  now: string,
+): DrillDownContent {
+  const step = CAPITAL_STEPS.find((s) => s.key === key)!;
+  const heading = `${step.step}. ${step.zh} · ${step.label}`;
+
+  switch (key) {
+    case "trust":
+      return {
+        ...receivedDrill(data, now),
+        title: heading,
+        subtitle: `${step.zhOutcome} — ${step.outcome}. Enterprise credit is the money that has actually cleared; this is every ringgit of it.`,
+      };
+
+    case "brand": {
+      const rows = [
+        ...factoryRows(data.factories, now),
+        ...mdnaRows(data.members),
+        ...nasdaqRows(data.companies),
+      ];
+      return {
+        title: heading,
+        subtitle: `${step.zhOutcome} — ${step.outcome}. Every counterparty MCN Asset HQ has reached, at any stage. Factory and MDNA amounts are capital into HQ; Nasdaq amounts are profit-after-tax, so they are never summed.`,
+        rows,
+        amountHeader: "Amount (RM)",
+        hideTotal: true,
+      };
+    }
+
+    case "organisation": {
+      const rows = [
+        ...factoryRows(data.factories.filter(isFactoryCommitted), now),
+        ...mdnaRows(data.members.filter(isMdnaCommitted)),
+      ];
+      return {
+        title: heading,
+        subtitle: `${step.zhOutcome} — ${step.outcome}. Deals closed by the introducer and referrer network. The names on these rows are the team that actually produces.`,
+        total: total(rows),
+        totalLabel: `${rows.length} closed by the network`,
+        amountHeader: "Into HQ (RM)",
+        rows,
+      };
+    }
+
+    case "system": {
+      const stalled = data.factories.filter((d) => isFactoryStalled(d, now));
+      const open = [
+        ...factoryRows(
+          data.factories.filter((d) => !isFactoryReceived(d) && !isFactoryStalled(d, now)),
+          now,
+        ),
+        ...mdnaRows(data.members.filter((m) => !isMdnaReceived(m))),
+      ];
+      // Stalled deals first — they are what drags this step's score down.
+      const rows = [...factoryRows(stalled, now), ...open];
+      return {
+        title: heading,
+        subtitle: `${step.zhOutcome} — ${step.outcome}. Everything still moving through the process, stalled records first. A replicable model is one where these clear predictably.`,
+        total: total(rows),
+        totalLabel: `${rows.length} in process · ${stalled.length} stalled`,
+        amountHeader: "Into HQ (RM)",
+        rows,
+      };
+    }
+
+    case "value": {
+      const rows = mdnaRows(
+        data.members.filter((m) => m.status === "paid" || m.status === "invested"),
+      );
+      return {
+        title: heading,
+        subtitle: `${step.zhOutcome} — ${step.outcome}. Senior Co-Living places paid for in full. Each one is a resident housed, which is the social value the raise is meant to produce.`,
+        total: total(rows),
+        totalLabel: `${rows.length} places funded`,
+        amountHeader: "Into HQ (RM)",
+        rows,
+      };
+    }
+
+    case "ecosystem":
+      return {
+        ...commissionDrill(data, "all", now),
+        title: heading,
+        subtitle: `${step.zhOutcome} — ${step.outcome}. What the introducer network has been paid. An ecosystem that is owed money is not yet an ecosystem.`,
+      };
+
+    case "legacy":
+      return {
+        ...nasdaqCommittedDrill(data),
+        title: heading,
+        subtitle: `${step.zhOutcome} — ${step.outcome}. Companies committed to the listing vehicle, measured in profit-after-tax. This never touches the RM20M figure.`,
+      };
+  }
 }
 
 export function introducerDrill(

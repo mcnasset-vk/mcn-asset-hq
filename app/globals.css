@@ -166,6 +166,16 @@
     -webkit-font-smoothing: antialiased;
   }
 
+  /* The 成交资本7步 headings are Simplified Chinese. Inter carries no CJK
+     glyphs, so name the platform faces explicitly rather than letting the
+     browser pick an arbitrary fallback with a different weight and metric. */
+  .zh {
+    font-family:
+      var(--font-inter), "PingFang SC", "Hiragino Sans GB",
+      "Microsoft YaHei", "Noto Sans CJK SC", "Noto Sans SC",
+      "Source Han Sans SC", "WenQuanYi Micro Hei", sans-serif;
+  }
+
   /* Almost every figure here is money or a count — keep the columns aligned. */
   .tnum {
     font-variant-numeric: tabular-nums;

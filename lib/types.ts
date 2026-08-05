@@ -161,6 +161,45 @@ export interface Commission {
 }
 
 /* -------------------------------------------------------------------------- */
+/* 成交资本7步 — the seven steps to closing capital                             */
+/* -------------------------------------------------------------------------- */
+
+export type CapitalStepKey =
+  | "trust"        // 成交信任 — 建立企业信用
+  | "brand"        // 成交品牌 — 建立企业影响力
+  | "organisation" // 成交组织 — 建立高绩效团队
+  | "system"       // 成交系统 — 建立可复制经营模式
+  | "value"        // 成交价值 — 持续创造社会价值
+  | "ecosystem"    // 成交生态 — 共创共赢、彼此成就
+  | "legacy";      // 成交传承 — 建立永续发展的企业
+
+/**
+ * Never stored. Derived in `metrics.ts` from the same records that produce the
+ * RM20M figure, so the scorecard cannot flatter the raise.
+ */
+export type CapitalStepState =
+  | "not_started"
+  | "building"
+  | "proving"
+  | "closed";
+
+/**
+ * The working layer against a step: who owns it and what moves it next. This
+ * is the only part a human types, and deliberately holds no score — a step's
+ * standing is always read from the pipeline.
+ */
+export interface CapitalStepPlan {
+  key: CapitalStepKey;
+  step: number;
+  ownerName: string;
+  /** The single next action that would move this step. */
+  focus: string;
+  targetDate: string | null;
+  notes?: string;
+  updatedAt: string | null;
+}
+
+/* -------------------------------------------------------------------------- */
 /* Drill-down                                                                  */
 /* -------------------------------------------------------------------------- */
 

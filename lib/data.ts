@@ -2,6 +2,7 @@ import "server-only";
 
 import { createClient } from "./supabase/server";
 import type {
+  CapitalStepPlan,
   Commission,
   DocumentRef,
   FactoryDeal,
@@ -22,6 +23,12 @@ export interface DashboardData {
   members: MdnaMember[];
   companies: NasdaqCompany[];
   commissions: Commission[];
+  /**
+   * Owner and next action per 成交资本7步 step. Readable by the super admin
+   * only — the seven scores are computed from every module at once, so a CIO
+   * reading them through their own row filter would see a misleading index.
+   */
+  capitalStepPlans: CapitalStepPlan[];
 }
 
 export const EMPTY_DATA: DashboardData = {
@@ -29,6 +36,7 @@ export const EMPTY_DATA: DashboardData = {
   members: [],
   companies: [],
   commissions: [],
+  capitalStepPlans: [],
 };
 
 /* -------------------------------------------------------------------------- */
@@ -61,13 +69,14 @@ function isBundledSample(path: string): boolean {
 export async function getDashboardData(): Promise<DashboardData> {
   const supabase = await createClient();
 
-  const [factories, members, companies, commissions, documents] =
+  const [factories, members, companies, commissions, documents, steps] =
     await Promise.all([
       supabase.from("factory_deals").select("*").order("submitted_at"),
       supabase.from("mdna_members").select("*").order("member_name"),
       supabase.from("nasdaq_companies").select("*").order("company_name"),
       supabase.from("commissions").select("*").order("due_at"),
       supabase.from("documents").select("*").order("uploaded_at"),
+      supabase.from("capital_steps").select("*").order("step"),
     ]);
 
   const docs = await buildDocumentIndex(
@@ -82,6 +91,7 @@ export async function getDashboardData(): Promise<DashboardData> {
     commissions: (commissions.data ?? []).map((row) =>
       mapCommission(row, docs),
     ),
+    capitalStepPlans: (steps.data ?? []).map(mapCapitalStep),
   };
 }
 
@@ -217,6 +227,22 @@ function mapCommission(
     dueAt: row.due_at as string,
     paidAt: (row.paid_at as string) ?? null,
     documents: docs.get(id) ?? [],
+  };
+}
+
+/**
+ * The seven rows are fixed and seeded by the migration, so this only ever
+ * carries the plan a human maintains — never a score.
+ */
+function mapCapitalStep(row: Record<string, unknown>): CapitalStepPlan {
+  return {
+    key: row.key as CapitalStepPlan["key"],
+    step: Number(row.step),
+    ownerName: (row.owner_name as string) ?? "",
+    focus: (row.focus as string) ?? "",
+    targetDate: (row.target_date as string) ?? null,
+    notes: (row.notes as string) ?? undefined,
+    updatedAt: (row.updated_at as string) ?? null,
   };
 }
 

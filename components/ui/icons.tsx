@@ -149,6 +149,14 @@ export const IconSort = (p: IconProps) => (
   </Icon>
 );
 
+/** Seven ascending steps — the 成交资本7步 scorecard. */
+export const IconSteps = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M3 20.5h4v-4h5v-4h5v-4h4v-4" />
+    <path d="M3 20.5h18" />
+  </Icon>
+);
+
 export const IconTarget = (p: IconProps) => (
   <Icon {...p}>
     <circle cx="12" cy="12" r="8.5" />
