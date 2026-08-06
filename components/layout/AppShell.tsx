@@ -11,6 +11,7 @@ import {
   IconDashboard,
   IconFactory,
   IconReceipt,
+  IconShield,
   IconTrending,
   IconUsers,
 } from "@/components/ui/icons";
@@ -27,6 +28,8 @@ type NavItem = {
   icon: (props: { className?: string }) => ReactNode;
   /** null = visible to everyone; a module = CIOs of that module only. */
   module: ModuleKey | null;
+  /** Shown only to the super admin, whatever `module` says. */
+  superAdminOnly?: boolean;
 };
 
 const OVERVIEW: NavItem = {
@@ -84,6 +87,16 @@ const STANDALONE: NavItem[] = [
   },
 ];
 
+/** Super admin only — granting access is not a business line. */
+const ADMIN: NavItem = {
+  href: "/admin/users",
+  label: "User Access",
+  short: "Users",
+  icon: IconShield,
+  module: null,
+  superAdminOnly: true,
+};
+
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const { profile, isSuperAdmin, canView } = useDashboard();
@@ -100,7 +113,12 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   // Mobile has no room for a nested tree, so it shows the leaves. Anyone who
   // can see the division gets the summary; a single-line CIO gets their line.
-  const mobileItems = [OVERVIEW, ...mdnaLines, ...standalone].map((item) =>
+  const mobileItems = [
+    OVERVIEW,
+    ...mdnaLines,
+    ...standalone,
+    ...(isSuperAdmin ? [ADMIN] : []),
+  ].map((item) =>
     canSeeDivision && item.href === "/mdna/admin"
       ? { ...item, href: "/mdna", short: "MDNA" }
       : item,
@@ -174,6 +192,12 @@ export function AppShell({ children }: { children: ReactNode }) {
               {standalone.map((item) => (
                 <NavLink key={item.href} item={item} pathname={pathname} />
               ))}
+            </div>
+          ) : null}
+
+          {isSuperAdmin ? (
+            <div className="mt-3 space-y-1 border-t border-line pt-3">
+              <NavLink item={ADMIN} pathname={pathname} />
             </div>
           ) : null}
         </nav>

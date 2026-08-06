@@ -133,6 +133,58 @@ export async function saveMecRecord(
 }
 
 /* -------------------------------------------------------------------------- */
+/* User management — super admin only                                          */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Set one account's role, module and job title.
+ *
+ * Authorisation is the `profiles_update_admin` policy: a non-super-admin's
+ * update matches no rows and changes nothing. The checks below exist to turn
+ * silence into a readable message, not to be the boundary.
+ */
+export async function saveUserAccess(
+  _prev: FormState,
+  formData: FormData,
+): Promise<FormState> {
+  const id = orNull(formData.get("id"));
+  if (!id) return { error: "No account selected." };
+
+  const role = str(formData.get("role")) || "pending";
+  // Only a CIO carries a module, and only the MEC module has job titles.
+  const rawModule = orNull(formData.get("module"));
+  const scopedModule = role === "cio" ? rawModule : null;
+  const rawTitle = orNull(formData.get("job_title"));
+  const jobTitle = scopedModule === "mec" ? rawTitle : null;
+
+  if (role === "cio" && !scopedModule) {
+    return { error: "A CIO must be scoped to exactly one business line." };
+  }
+
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from("profiles")
+    .update({ role, module: scopedModule, job_title: jobTitle })
+    .eq("id", id)
+    .select("id");
+
+  if (error) return { error: describe(error.message) };
+
+  // No error and no row means RLS filtered the update out — the caller is not
+  // a super admin, or the account no longer exists.
+  if (!data || data.length === 0) {
+    return {
+      error:
+        "Nothing was updated. Only a super admin can change roles, and the account must still exist.",
+    };
+  }
+
+  refresh();
+  return { ok: true };
+}
+
+/* -------------------------------------------------------------------------- */
 /* MEC Lifestyle — operations desk                                             */
 /* -------------------------------------------------------------------------- */
 

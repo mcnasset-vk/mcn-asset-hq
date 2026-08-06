@@ -51,6 +51,13 @@ export const IconTrending = (p: IconProps) => (
   </Icon>
 );
 
+export const IconShield = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M12 3.2 4.8 6v5.6c0 4.3 3 8.1 7.2 9.2 4.2-1.1 7.2-4.9 7.2-9.2V6L12 3.2Z" />
+    <path d="m9.2 12.1 2 2 3.6-3.8" />
+  </Icon>
+);
+
 export const IconBriefcase = (p: IconProps) => (
   <Icon {...p}>
     <rect x="2.5" y="7" width="19" height="13.5" rx="2" />

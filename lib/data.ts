@@ -454,6 +454,30 @@ function mapCommission(
 /* Signed-in user                                                              */
 /* -------------------------------------------------------------------------- */
 
+/**
+ * Every account, for the user management page.
+ *
+ * Returns only what the caller may see: the profiles SELECT policy gives a
+ * super admin every row and everyone else just their own, so a CIO calling
+ * this gets a one-row list rather than an error.
+ */
+export async function getAllProfiles(): Promise<UserProfile[]> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("profiles")
+    .select("*")
+    .order("created_at");
+
+  return (data ?? []).map((row) => ({
+    id: row.id,
+    fullName: row.full_name,
+    email: row.email,
+    role: row.role,
+    module: row.module,
+    jobTitle: row.job_title ?? null,
+  }));
+}
+
 export async function getCurrentProfile(): Promise<UserProfile | null> {
   const supabase = await createClient();
 
