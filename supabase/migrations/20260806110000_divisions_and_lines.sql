@@ -13,46 +13,84 @@
 --
 -- `job_title` disappears: what it expressed is now simply the MEC business
 -- line, so there is one concept instead of two.
+--
+-- Written to be safely re-runnable: every step checks the state it expects,
+-- so a failed attempt can be corrected and run again from the top.
 
 /* -------------------------------------------------------------------------- */
-/* Widen the constraints before moving any data                                */
+/* Clear every existing CHECK on profiles                                      */
+/* -------------------------------------------------------------------------- */
+-- Dropping by name is not enough. `module` and `role` were declared with
+-- inline CHECKs, which Postgres auto-names (`profiles_module_check`) and
+-- carries along when the column is renamed — so the old constraint would go
+-- on validating the new column against the old list of values. Clearing them
+-- all and re-adding exactly what we want is the only way to be certain.
+
+do $$
+declare
+  c record;
+begin
+  for c in
+    select conname
+      from pg_constraint
+     where conrelid = 'public.profiles'::regclass
+       and contype = 'c'
+  loop
+    execute format('alter table public.profiles drop constraint %I', c.conname);
+  end loop;
+end $$;
+
+/* -------------------------------------------------------------------------- */
+/* Rename the column, if it has not been renamed already                       */
 /* -------------------------------------------------------------------------- */
 
-alter table public.profiles drop constraint if exists profiles_role_check;
-alter table public.profiles drop constraint if exists profiles_module_matches_role;
-alter table public.profiles drop constraint if exists profiles_job_title_check;
-alter table public.profiles drop constraint if exists profiles_job_title_requires_mec;
-
-alter table public.profiles
-  rename column module to business_line;
+do $$
+begin
+  if exists (select 1 from information_schema.columns
+              where table_schema = 'public' and table_name = 'profiles'
+                and column_name = 'module')
+     and not exists (select 1 from information_schema.columns
+                      where table_schema = 'public' and table_name = 'profiles'
+                        and column_name = 'business_line')
+  then
+    alter table public.profiles rename column module to business_line;
+  end if;
+end $$;
 
 /* -------------------------------------------------------------------------- */
 /* Migrate existing rows                                                       */
 /* -------------------------------------------------------------------------- */
--- A CIO's old module tells us the division. The four MDNA lines keep their
--- key; `mec` becomes the division with the line taken from the old job title.
+-- Guarded on job_title still existing, so a second run skips this cleanly.
 
-update public.profiles
-   set role = case
-                when role = 'cio' and business_line = 'mec'  then 'mec'
-                when role = 'cio'                            then 'mdna'
-                else role
-              end,
-       business_line = case
-         -- MDNA Admin ran the whole division, so it holds no single line.
-         when role = 'cio' and business_line = 'mdna' then null
-         when role = 'cio' and business_line = 'mec' then
-           case job_title
-             when 'chief_strategic_partnership_director' then 'strategic_partnership'
-             when 'operations_manager_lifestyle'         then 'operations_manager'
-             when 'ops_admin_associate'                  then 'operations_executive'
+do $$
+begin
+  if exists (select 1 from information_schema.columns
+              where table_schema = 'public' and table_name = 'profiles'
+                and column_name = 'job_title')
+  then
+    update public.profiles
+       set business_line = case
+             -- MDNA Admin ran the whole division, so it holds no single line.
+             when role = 'cio' and business_line = 'mdna' then null
+             when role = 'cio' and business_line = 'mec' then
+               case job_title
+                 when 'chief_strategic_partnership_director' then 'strategic_partnership'
+                 when 'operations_manager_lifestyle'         then 'operations_manager'
+                 when 'ops_admin_associate'                  then 'operations_executive'
+                 else null
+               end
+             when role = 'cio' then business_line
              else null
-           end
-         when role = 'cio' then business_line
-         else null
-       end;
+           end,
+           role = case
+                    when role = 'cio' and business_line = 'mec' then 'mec'
+                    when role = 'cio'                           then 'mdna'
+                    else role
+                  end;
 
-alter table public.profiles drop column if exists job_title;
+    alter table public.profiles drop column job_title;
+  end if;
+end $$;
 
 /* -------------------------------------------------------------------------- */
 /* New constraints                                                             */
@@ -72,11 +110,6 @@ alter table public.profiles
             ('strategic_partnership', 'operations_manager',
              'operations_executive'))
     );
-
--- Only a division role may carry a line at all.
-alter table public.profiles
-  add constraint profiles_line_requires_division
-    check (business_line is null or role in ('mdna', 'mec'));
 
 /* -------------------------------------------------------------------------- */
 /* Access                                                                      */
@@ -128,7 +161,7 @@ comment on function private.can_access(text) is
   'dashboard rather than restricting rows.';
 
 /* -------------------------------------------------------------------------- */
-/* Role assignment helpers                                                     */
+/* Role assignment helper                                                      */
 /* -------------------------------------------------------------------------- */
 
 drop function if exists private.assign_job_title(text, text);
