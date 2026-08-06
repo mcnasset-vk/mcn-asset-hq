@@ -76,8 +76,13 @@ const MDNA_LINES: NavItem[] = [
   },
 ];
 
-/** Sits outside the MDNA division. */
-const STANDALONE: NavItem[] = [
+/**
+ * MEC is its own division, a peer of MDNA rather than one of its lines. Its
+ * business line therefore sits at the same indent as Factory Cosif and Nasdaq
+ * M&A, under a heading of its own — which is also what the database says:
+ * `private.can_access` lets the mdna scope span its four lines but never mec.
+ */
+const MEC_LINES: NavItem[] = [
   {
     href: "/mec",
     label: "MEC Asset (HR)",
@@ -109,14 +114,14 @@ export function AppShell({ children }: { children: ReactNode }) {
   const canSeeDivision = isSuperAdmin || profile.module === "mdna";
 
   const mdnaLines = MDNA_LINES.filter(visible);
-  const standalone = STANDALONE.filter(visible);
+  const mecLines = MEC_LINES.filter(visible);
 
   // Mobile has no room for a nested tree, so it shows the leaves. Anyone who
   // can see the division gets the summary; a single-line CIO gets their line.
   const mobileItems = [
     OVERVIEW,
     ...mdnaLines,
-    ...standalone,
+    ...mecLines,
     ...(isSuperAdmin ? [ADMIN] : []),
   ].map((item) =>
     canSeeDivision && item.href === "/mdna/admin"
@@ -187,11 +192,18 @@ export function AppShell({ children }: { children: ReactNode }) {
             </div>
           ) : null}
 
-          {standalone.length > 0 ? (
-            <div className="space-y-1 pt-3">
-              {standalone.map((item) => (
-                <NavLink key={item.href} item={item} pathname={pathname} />
-              ))}
+          {mecLines.length > 0 ? (
+            <div className="pt-3">
+              {/* A plain heading, not a link: MEC has no division summary
+                  page, so a clickable label would lead nowhere. */}
+              <p className="px-3 py-1.5 text-[0.6875rem] font-semibold uppercase tracking-[0.09em] text-ink-subtle">
+                MEC
+              </p>
+              <div className="mt-1 space-y-1 border-l border-line pl-2">
+                {mecLines.map((item) => (
+                  <NavLink key={item.href} item={item} pathname={pathname} />
+                ))}
+              </div>
             </div>
           ) : null}
 
