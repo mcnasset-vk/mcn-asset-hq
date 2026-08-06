@@ -7,6 +7,7 @@ import {
   LIFESTYLE_MONTHLY_FEE,
 } from "@/lib/constants";
 import { createClient } from "@/lib/supabase/server";
+import { LINES_BY_ROLE, type BusinessLine } from "@/lib/types";
 
 export interface FormState {
   ok?: boolean;
@@ -151,21 +152,20 @@ export async function saveUserAccess(
   if (!id) return { error: "No account selected." };
 
   const role = str(formData.get("role")) || "pending";
-  // Only a CIO carries a module, and only the MEC module has job titles.
-  const rawModule = orNull(formData.get("module"));
-  const scopedModule = role === "cio" ? rawModule : null;
-  const rawTitle = orNull(formData.get("job_title"));
-  const jobTitle = scopedModule === "mec" ? rawTitle : null;
+  // Only a division role carries a line; a null line means the whole division.
+  const rawLine = orNull(formData.get("business_line"));
+  const businessLine = role === "mdna" || role === "mec" ? rawLine : null;
 
-  if (role === "cio" && !scopedModule) {
-    return { error: "A CIO must be scoped to exactly one business line." };
+  const allowed = LINES_BY_ROLE[role as "mdna" | "mec"] ?? [];
+  if (businessLine && !allowed.includes(businessLine as BusinessLine)) {
+    return { error: `That business line does not belong to the ${role} division.` };
   }
 
   const supabase = await createClient();
 
   const { data, error } = await supabase
     .from("profiles")
-    .update({ role, module: scopedModule, job_title: jobTitle })
+    .update({ role, business_line: businessLine })
     .eq("id", id)
     .select("id");
 

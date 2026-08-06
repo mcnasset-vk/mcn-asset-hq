@@ -10,7 +10,19 @@
  * `pending` is the default for a newly created account: the person can sign in
  * but sees nothing until the super admin assigns them a scope.
  */
-export type Role = "super_admin" | "cio" | "pending";
+/**
+ * `mdna` and `mec` are divisions, not job descriptions. A person holding one
+ * sees that division; `businessLine` optionally narrows them to a single line
+ * inside it.
+ */
+export type Role = "super_admin" | "mdna" | "mec" | "pending";
+
+export const ROLE_LABELS: Record<Role, string> = {
+  super_admin: "Super admin",
+  mdna: "MDNA",
+  mec: "MEC",
+  pending: "Pending",
+};
 
 /**
  * The scopes a CIO can hold. Four are business lines; `commissions` is the
@@ -28,15 +40,37 @@ export type ModuleKey =
  * else — access is `private.can_access()` in Postgres, which never reads this.
  * Null means the standard module view.
  */
-export type JobTitle =
-  | "chief_strategic_partnership_director"
-  | "operations_manager_lifestyle"
-  | "ops_admin_associate";
+/**
+ * A business line nests inside a division role. Null means the whole
+ * division — which is what an MDNA admin holds.
+ *
+ * For MDNA the line narrows which records are visible. For MEC it selects
+ * which dashboard renders: the three desks collaborate on the same records,
+ * so restricting rows between them would break the handoffs.
+ */
+export type MdnaLine = "mdna" | "factory" | "nasdaq" | "commissions";
 
-export const JOB_TITLE_LABELS: Record<JobTitle, string> = {
-  chief_strategic_partnership_director: "Chief Strategic Partnership Director",
-  operations_manager_lifestyle: "Operations Manager — MEC Lifestyle",
-  ops_admin_associate: "Ops Admin Associate — MEC Lifestyle",
+export type MecLine =
+  | "strategic_partnership"
+  | "operations_manager"
+  | "operations_executive";
+
+export type BusinessLine = MdnaLine | MecLine;
+
+export const BUSINESS_LINE_LABELS: Record<BusinessLine, string> = {
+  mdna: "MDNA Senior Co-Living",
+  factory: "Factory Cosif",
+  nasdaq: "Nasdaq M&A",
+  commissions: "Commissions",
+  strategic_partnership: "Strategic Partnership",
+  operations_manager: "MEC Operation Manager",
+  operations_executive: "MEC Operation Executive",
+};
+
+/** Which lines belong to which division role. */
+export const LINES_BY_ROLE: Record<"mdna" | "mec", BusinessLine[]> = {
+  mdna: ["mdna", "factory", "nasdaq", "commissions"],
+  mec: ["strategic_partnership", "operations_manager", "operations_executive"],
 };
 
 export interface UserProfile {
@@ -44,10 +78,8 @@ export interface UserProfile {
   fullName: string;
   email: string;
   role: Role;
-  /** null for super_admin (sees everything), set for a CIO. */
-  module: ModuleKey | null;
-  /** null = the standard view for their module. */
-  jobTitle: JobTitle | null;
+  /** null = the whole division. Only ever set when role is mdna or mec. */
+  businessLine: BusinessLine | null;
 }
 
 /* -------------------------------------------------------------------------- */

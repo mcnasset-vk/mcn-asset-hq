@@ -24,7 +24,7 @@ export function ModuleGuard({
 
   const allowed =
     module === "division"
-      ? isSuperAdmin || profile.module === "mdna"
+      ? isSuperAdmin || profile.role === "mdna"
       : canView(module);
 
   return allowed ? <>{children}</> : <Restricted />;

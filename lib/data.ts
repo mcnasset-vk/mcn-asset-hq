@@ -473,8 +473,7 @@ export async function getAllProfiles(): Promise<UserProfile[]> {
     fullName: row.full_name,
     email: row.email,
     role: row.role,
-    module: row.module,
-    jobTitle: row.job_title ?? null,
+    businessLine: row.business_line ?? null,
   }));
 }
 
@@ -486,10 +485,10 @@ export async function getCurrentProfile(): Promise<UserProfile | null> {
   } = await supabase.auth.getUser();
   if (!user) return null;
 
-  // Deliberately `*` rather than a column list: naming `job_title` explicitly
+  // Deliberately `*` rather than a column list: naming a column explicitly
   // makes the whole query fail with 42703 on a database where that column does
   // not exist yet, which returns a null profile and locks everyone out. With
-  // `*` a missing column is simply absent and the title falls back to null.
+  // `*` a missing column is simply absent and the value falls back to null.
   const { data } = await supabase
     .from("profiles")
     .select("*")
@@ -503,7 +502,6 @@ export async function getCurrentProfile(): Promise<UserProfile | null> {
     fullName: data.full_name,
     email: data.email,
     role: data.role,
-    module: data.module,
-    jobTitle: data.job_title ?? null,
+    businessLine: data.business_line ?? null,
   };
 }

@@ -111,7 +111,8 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   // The division summary spans all four MDNA lines, so it is offered to the
   // super admin and to MDNA Admin — the two roles that can actually see them.
-  const canSeeDivision = isSuperAdmin || profile.module === "mdna";
+  const canSeeDivision =
+    isSuperAdmin || (profile.role === "mdna" && profile.businessLine === null);
 
   const mdnaLines = MDNA_LINES.filter(visible);
   const mecLines = MEC_LINES.filter(visible);
@@ -222,7 +223,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           <p className="mt-1.5 text-[0.6875rem] text-ink-subtle">
             {isSuperAdmin
               ? "Full access to all modules"
-              : profile.module === "mdna"
+              : profile.role === "mdna"
                 ? "MDNA division — four business lines"
                 : "Scoped to one module"}
           </p>

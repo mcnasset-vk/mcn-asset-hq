@@ -23,7 +23,7 @@ import {
   mecRows,
   mecServiceFee,
 } from "@/lib/metrics";
-import { JOB_TITLE_LABELS } from "@/lib/types";
+import { BUSINESS_LINE_LABELS } from "@/lib/types";
 import type {
   MecRecord,
   PartnershipInitiative,
@@ -60,8 +60,8 @@ export function PartnershipView() {
     <>
       <PageHeader
         eyebrow={
-          profile.jobTitle
-            ? JOB_TITLE_LABELS[profile.jobTitle]
+          profile.businessLine
+            ? BUSINESS_LINE_LABELS[profile.businessLine]
             : "Partnership Desk"
         }
         title={profile.fullName || "Partnership Desk"}

@@ -39,8 +39,11 @@ export function DashboardProvider({
       // interface offers — RLS is what actually enforces it.
       canView: (module) =>
         profile.role === "super_admin" ||
-        profile.module === module ||
-        (profile.module === "mdna" && MDNA_DIVISION.includes(module)),
+        (profile.role === "mdna" &&
+          MDNA_DIVISION.includes(module) &&
+          (profile.businessLine === null ||
+            profile.businessLine === module)) ||
+        (profile.role === "mec" && module === "mec"),
     }),
     [data, now, profile],
   );

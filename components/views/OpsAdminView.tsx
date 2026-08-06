@@ -13,7 +13,7 @@ import { Card, CardHeader } from "@/components/ui/Card";
 import { cn } from "@/lib/cn";
 import { formatDate, formatRM } from "@/lib/format";
 import { getDeliverableSummary } from "@/lib/metrics";
-import { JOB_TITLE_LABELS } from "@/lib/types";
+import { BUSINESS_LINE_LABELS } from "@/lib/types";
 import type { Deliverable, LifestyleInvoice, OpsSyncLog } from "@/lib/types";
 
 const MONTHS = [
@@ -50,8 +50,8 @@ export function OpsAdminView() {
     <>
       <PageHeader
         eyebrow={
-          profile.jobTitle
-            ? JOB_TITLE_LABELS[profile.jobTitle]
+          profile.businessLine
+            ? BUSINESS_LINE_LABELS[profile.businessLine]
             : "Ops Admin Associate"
         }
         title={profile.fullName || "Ops Admin Associate"}

@@ -1,7 +1,7 @@
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Card, CardHeader } from "@/components/ui/Card";
-import { MODULE_LABELS } from "@/lib/constants";
 import { getCurrentProfile } from "@/lib/data";
+import { BUSINESS_LINE_LABELS, ROLE_LABELS } from "@/lib/types";
 
 import { ChangePasswordForm } from "./ChangePasswordForm";
 
@@ -35,21 +35,21 @@ export default async function AccountPage() {
             <Row
               label="Role"
               value={
-                profile?.role === "super_admin"
-                  ? "Super Admin"
-                  : profile?.role === "cio"
-                    ? "CIO"
-                    : "Pending"
+                profile?.role
+                  ? ROLE_LABELS[profile.role]
+                  : "Pending"
               }
             />
             <Row
               label="Access"
               value={
                 profile?.role === "super_admin"
-                  ? "All modules and the commission ledger"
-                  : profile?.module
-                    ? MODULE_LABELS[profile.module]
-                    : "No module assigned yet"
+                  ? "Every division"
+                  : profile?.businessLine
+                    ? BUSINESS_LINE_LABELS[profile.businessLine]
+                    : profile?.role === "mdna" || profile?.role === "mec"
+                      ? `${ROLE_LABELS[profile.role]} — whole division`
+                      : "No access assigned yet"
               }
             />
           </dl>

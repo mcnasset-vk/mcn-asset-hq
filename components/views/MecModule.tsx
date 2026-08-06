@@ -12,19 +12,19 @@ import { PartnershipView } from "./PartnershipView";
  *
  * A job title changes which page renders, never which rows are readable —
  * `private.can_access('mec')` in Postgres is the only access boundary, and it
- * does not look at job_title at all. The super admin keeps the module-wide
+ * does not look at business_line at all. The super admin keeps the module-wide
  * view because they oversee all three staff rather than carrying a quota.
  */
 export function MecModule() {
   const { profile, isSuperAdmin } = useDashboard();
 
   if (!isSuperAdmin) {
-    switch (profile.jobTitle) {
-      case "chief_strategic_partnership_director":
+    switch (profile.businessLine) {
+      case "strategic_partnership":
         return <PartnershipView />;
-      case "operations_manager_lifestyle":
+      case "operations_manager":
         return <LifestyleOpsView />;
-      case "ops_admin_associate":
+      case "operations_executive":
         return <OpsAdminView />;
     }
   }

@@ -4,16 +4,23 @@ import Link from "next/link";
 
 import { useDashboard } from "@/components/providers/DashboardProvider";
 import { IconLock } from "@/components/ui/icons";
-import { MODULE_LABELS } from "@/lib/constants";
+import { BUSINESS_LINE_LABELS, ROLE_LABELS } from "@/lib/types";
 
 /**
- * Phase 1 access notice. This is a UI courtesy only — in Phase 2 the real
- * guard is row-level security in Postgres, so a scoped user cannot read
- * another module's rows even by calling the API directly.
+ * Access notice. This is a UI courtesy only — the real guard is row-level
+ * security in Postgres, so a scoped user cannot read another division's rows
+ * even by calling the API directly.
  */
 export function Restricted() {
   const { profile } = useDashboard();
-  const ownModule = profile.module;
+  const ownLine = profile.businessLine;
+  // Someone holding a whole division has no single line to name, so fall back
+  // to the division itself rather than saying "a single module".
+  const scope = ownLine
+    ? BUSINESS_LINE_LABELS[ownLine]
+    : profile.role === "mdna" || profile.role === "mec"
+      ? `the ${ROLE_LABELS[profile.role]} division`
+      : null;
 
   return (
     <div className="mx-auto flex max-w-md flex-col items-center gap-3 rounded-xl border border-line bg-surface px-6 py-14 text-center shadow-sm">
@@ -21,16 +28,14 @@ export function Restricted() {
         <IconLock className="size-6" />
       </span>
       <h1 className="font-display text-xl font-semibold text-ink">
-        Not your module
+        Not your section
       </h1>
       <p className="text-sm text-ink-muted">
         {profile.fullName} is scoped to{" "}
-        <strong className="text-ink">
-          {ownModule ? MODULE_LABELS[ownModule] : "a single module"}
-        </strong>{" "}
-        and cannot view this section.
+        <strong className="text-ink">{scope ?? "no section yet"}</strong> and
+        cannot view this one.
       </p>
-      {ownModule ? (
+      {scope ? (
         <Link
           href="/"
           className="mt-1 rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-white transition hover:bg-accent-hover"

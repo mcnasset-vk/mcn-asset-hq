@@ -4,7 +4,7 @@ import Link from "next/link";
 
 import { signOut } from "@/app/login/actions";
 import { useDashboard } from "@/components/providers/DashboardProvider";
-import { MODULE_LABELS } from "@/lib/constants";
+import { BUSINESS_LINE_LABELS, ROLE_LABELS } from "@/lib/types";
 
 /** Signed-in identity, a way into account settings, and sign out. */
 export function UserMenu() {
@@ -23,7 +23,9 @@ export function UserMenu() {
         <span className="block text-[0.6875rem] leading-tight text-ink-subtle">
           {isSuperAdmin
             ? "Super Admin"
-            : `${MODULE_LABELS[profile.module!]} CIO`}
+            : profile.businessLine
+              ? BUSINESS_LINE_LABELS[profile.businessLine]
+              : ROLE_LABELS[profile.role]}
         </span>
       </Link>
 

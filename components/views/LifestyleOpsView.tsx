@@ -16,7 +16,7 @@ import { cn } from "@/lib/cn";
 import { CEC_ONBOARDING_STEPS } from "@/lib/constants";
 import { formatDate, formatRM } from "@/lib/format";
 import { cecProgress, getLifestyleOpsSummary } from "@/lib/metrics";
-import { JOB_TITLE_LABELS } from "@/lib/types";
+import { BUSINESS_LINE_LABELS } from "@/lib/types";
 import type {
   CecChampion,
   EventMedia,
@@ -52,8 +52,8 @@ export function LifestyleOpsView() {
     <>
       <PageHeader
         eyebrow={
-          profile.jobTitle
-            ? JOB_TITLE_LABELS[profile.jobTitle]
+          profile.businessLine
+            ? BUSINESS_LINE_LABELS[profile.businessLine]
             : "MEC Lifestyle Operations"
         }
         title={profile.fullName || "MEC Lifestyle Operations"}

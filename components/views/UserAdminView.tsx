@@ -8,22 +8,24 @@ import { PageHeader } from "@/components/layout/PageHeader";
 import { useDashboard } from "@/components/providers/DashboardProvider";
 import { Badge } from "@/components/ui/Badge";
 import { Card, CardHeader } from "@/components/ui/Card";
-import { MODULE_LABELS } from "@/lib/constants";
-import { JOB_TITLE_LABELS } from "@/lib/types";
-import type { JobTitle, ModuleKey, Role, UserProfile } from "@/lib/types";
+import {
+  BUSINESS_LINE_LABELS,
+  LINES_BY_ROLE,
+  ROLE_LABELS,
+} from "@/lib/types";
+import type { BusinessLine, Role, UserProfile } from "@/lib/types";
 
-const ROLES: { value: Role; label: string; hint: string }[] = [
-  { value: "super_admin", label: "Super admin", hint: "Sees everything" },
-  { value: "cio", label: "CIO", hint: "One business line" },
-  { value: "pending", label: "Pending", hint: "No access yet" },
+const ROLES: { value: Role; hint: string }[] = [
+  { value: "super_admin", hint: "Every division" },
+  { value: "mdna", hint: "MDNA division" },
+  { value: "mec", hint: "MEC division" },
+  { value: "pending", hint: "No access yet" },
 ];
-
-const MODULES = Object.keys(MODULE_LABELS) as ModuleKey[];
-const TITLES = Object.keys(JOB_TITLE_LABELS) as JobTitle[];
 
 const ROLE_TONE = {
   super_admin: "accent",
-  cio: "received",
+  mdna: "received",
+  mec: "committed",
   pending: "idle",
 } as const;
 
@@ -33,7 +35,7 @@ export function UserAdminView({ profiles }: { profiles: UserProfile[] }) {
       <PageHeader
         eyebrow="Administration"
         title="User Access"
-        description="Grant and change access for every account. A CIO must be scoped to exactly one business line; job titles apply only inside MEC Asset and decide which dashboard that person lands on."
+        description="A role is a division. Leaving the business line blank gives someone the whole division — that is what an MDNA admin holds. Setting a line narrows an MDNA person to that line, and for MEC it chooses which desk they land on."
       />
 
       <Card>
@@ -51,11 +53,11 @@ export function UserAdminView({ profiles }: { profiles: UserProfile[] }) {
       </Card>
 
       <p className="mt-4 rounded-xl border border-line bg-surface-2 px-4 py-3 text-xs leading-relaxed text-ink-muted">
-        Access is enforced in the database, not here. A CIO gets zero rows from
-        every other business line even calling the API directly with their own
-        token, so this page decides what someone is scoped to — never whether
-        the hiding works. The last super admin cannot be demoted: the database
-        refuses it, because otherwise nobody could manage roles again.
+        Access is enforced in the database, not here. An MDNA person gets zero
+        rows from MEC even calling the API directly with their own token, so
+        this page decides what someone is scoped to — never whether the hiding
+        works. The last super admin cannot be demoted: the database refuses it,
+        because otherwise nobody could manage roles again.
       </p>
     </>
   );
@@ -69,16 +71,19 @@ function UserRow({ profile }: { profile: UserProfile }) {
   );
 
   const [role, setRole] = useState<Role>(profile.role);
-  const [module, setModule] = useState<ModuleKey | "">(profile.module ?? "");
-  const [jobTitle, setJobTitle] = useState<JobTitle | "">(
-    profile.jobTitle ?? "",
+  const [line, setLine] = useState<BusinessLine | "">(
+    profile.businessLine ?? "",
   );
 
   const isSelf = profile.id === me.id;
+  const isDivision = role === "mdna" || role === "mec";
+  const lines = isDivision ? LINES_BY_ROLE[role] : [];
+
+  // Switching division invalidates the previous line, so a stale value must
+  // not be submitted.
+  const effectiveLine = lines.includes(line as BusinessLine) ? line : "";
   const dirty =
-    role !== profile.role ||
-    (module || null) !== profile.module ||
-    (jobTitle || null) !== profile.jobTitle;
+    role !== profile.role || (effectiveLine || null) !== profile.businessLine;
 
   return (
     <form action={action} className="px-5 py-4">
@@ -97,26 +102,29 @@ function UserRow({ profile }: { profile: UserProfile }) {
           <p className="truncate text-xs text-ink-subtle">{profile.email}</p>
         </div>
         <Badge tone={ROLE_TONE[profile.role]} dot>
-          {profile.role === "cio" && profile.module
-            ? MODULE_LABELS[profile.module]
-            : ROLES.find((r) => r.value === profile.role)?.label}
+          {profile.businessLine
+            ? BUSINESS_LINE_LABELS[profile.businessLine]
+            : ROLE_LABELS[profile.role]}
         </Badge>
       </div>
 
-      <div className="mt-3 grid gap-3 sm:grid-cols-3">
+      <div className="mt-3 grid gap-3 sm:grid-cols-2">
         <label className="block">
           <span className="mb-1.5 block text-xs font-medium text-ink-muted">
-            Role
+            Role · division
           </span>
           <select
             name="role"
             value={role}
-            onChange={(e) => setRole(e.target.value as Role)}
+            onChange={(e) => {
+              setRole(e.target.value as Role);
+              setLine("");
+            }}
             className="w-full rounded-lg border border-line bg-surface-2 px-3 py-2 text-sm text-ink focus:border-accent focus:outline-none"
           >
             {ROLES.map((r) => (
               <option key={r.value} value={r.value}>
-                {r.label} — {r.hint}
+                {ROLE_LABELS[r.value]} — {r.hint}
               </option>
             ))}
           </select>
@@ -127,47 +135,23 @@ function UserRow({ profile }: { profile: UserProfile }) {
             Business line
           </span>
           <select
-            name="module"
-            value={module}
-            onChange={(e) => setModule(e.target.value as ModuleKey | "")}
-            disabled={role !== "cio"}
+            name="business_line"
+            value={effectiveLine}
+            onChange={(e) => setLine(e.target.value as BusinessLine | "")}
+            disabled={!isDivision}
             className="w-full rounded-lg border border-line bg-surface-2 px-3 py-2 text-sm text-ink focus:border-accent focus:outline-none disabled:opacity-50"
           >
-            <option value="">— none —</option>
-            {MODULES.map((m) => (
-              <option key={m} value={m}>
-                {MODULE_LABELS[m]}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        <label className="block">
-          <span className="mb-1.5 block text-xs font-medium text-ink-muted">
-            Job title
-          </span>
-          <select
-            name="job_title"
-            value={jobTitle}
-            onChange={(e) => setJobTitle(e.target.value as JobTitle | "")}
-            disabled={role !== "cio" || module !== "mec"}
-            className="w-full rounded-lg border border-line bg-surface-2 px-3 py-2 text-sm text-ink focus:border-accent focus:outline-none disabled:opacity-50"
-          >
-            <option value="">— standard module view —</option>
-            {TITLES.map((t) => (
-              <option key={t} value={t}>
-                {JOB_TITLE_LABELS[t]}
+            <option value="">
+              {isDivision ? "— whole division —" : "— not applicable —"}
+            </option>
+            {lines.map((l) => (
+              <option key={l} value={l}>
+                {BUSINESS_LINE_LABELS[l]}
               </option>
             ))}
           </select>
         </label>
       </div>
-
-      {role === "cio" && !module ? (
-        <p className="mt-2 text-xs text-risk">
-          Pick a business line — a CIO scoped to nothing would see nothing.
-        </p>
-      ) : null}
 
       {isSelf && role !== "super_admin" ? (
         <p className="mt-2 text-xs text-risk">
@@ -181,12 +165,10 @@ function UserRow({ profile }: { profile: UserProfile }) {
           {state.error}
         </p>
       ) : null}
-      {state.ok ? (
-        <p className="mt-2 text-xs text-received">Saved.</p>
-      ) : null}
+      {state.ok ? <p className="mt-2 text-xs text-received">Saved.</p> : null}
 
       <div className="mt-3 flex justify-end">
-        <SaveButton disabled={!dirty || (role === "cio" && !module)} />
+        <SaveButton disabled={!dirty} />
       </div>
     </form>
   );
