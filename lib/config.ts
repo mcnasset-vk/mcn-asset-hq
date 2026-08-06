@@ -1,0 +1,101 @@
+/**
+ * Every commercially sensitive figure, read from the environment.
+ *
+ * This repository is public. Contract values, staff quotas, contractor rates
+ * and fundraising targets are confidential — several of them are individual
+ * compensation terms covered by confidentiality clauses — so none of them may
+ * appear in source, in a default, or in a comment. Set them in `.env.local`
+ * locally and in the hosting environment for a deployment; `.env.example`
+ * lists every name with no values.
+ *
+ * Each reference below is written out in full rather than looked up
+ * dynamically, because Next.js inlines `process.env.NEXT_PUBLIC_*` at build
+ * time only when it can see the literal name.
+ *
+ * An unset variable falls back to 0, which is deliberate: `ratio()` returns 0
+ * on a zero denominator, so a misconfigured deployment renders honest zeroes
+ * instead of NaN. A dashboard reading RM 0 everywhere is an obvious signal
+ * that the environment is incomplete.
+ */
+
+function num(raw: string | undefined): number {
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Capital raise                                                               */
+/* -------------------------------------------------------------------------- */
+
+export const CFG_FUNDRAISING_TARGET = num(
+  process.env.NEXT_PUBLIC_FUNDRAISING_TARGET,
+);
+export const CFG_NASDAQ_PAT_TARGET = num(
+  process.env.NEXT_PUBLIC_NASDAQ_PAT_TARGET,
+);
+
+/* -------------------------------------------------------------------------- */
+/* Deal structures                                                             */
+/* -------------------------------------------------------------------------- */
+
+export const CFG_FACTORY_DISBURSEMENT = num(
+  process.env.NEXT_PUBLIC_FACTORY_DISBURSEMENT,
+);
+export const CFG_FACTORY_HQ_INVESTMENT = num(
+  process.env.NEXT_PUBLIC_FACTORY_HQ_INVESTMENT,
+);
+export const CFG_MDNA_PACKAGE = num(process.env.NEXT_PUBLIC_MDNA_PACKAGE);
+export const CFG_MDNA_HQ_INVESTMENT = num(
+  process.env.NEXT_PUBLIC_MDNA_HQ_INVESTMENT,
+);
+export const CFG_INTRODUCER_COMMISSION = num(
+  process.env.NEXT_PUBLIC_INTRODUCER_COMMISSION,
+);
+
+/* -------------------------------------------------------------------------- */
+/* MEC revenue streams                                                         */
+/* -------------------------------------------------------------------------- */
+
+export const CFG_MEC_TARGET_CEC = num(process.env.NEXT_PUBLIC_MEC_TARGET_CEC);
+export const CFG_MEC_TARGET_SPONSOR = num(
+  process.env.NEXT_PUBLIC_MEC_TARGET_SPONSOR,
+);
+export const CFG_MEC_TARGET_SUBSCRIPTION = num(
+  process.env.NEXT_PUBLIC_MEC_TARGET_SUBSCRIPTION,
+);
+export const CFG_MEC_TARGET_ADVISORY = num(
+  process.env.NEXT_PUBLIC_MEC_TARGET_ADVISORY,
+);
+export const CFG_MEC_TARGET_TRAINING = num(
+  process.env.NEXT_PUBLIC_MEC_TARGET_TRAINING,
+);
+export const CFG_MEC_TARGET_PAYROLL = num(
+  process.env.NEXT_PUBLIC_MEC_TARGET_PAYROLL,
+);
+
+/* -------------------------------------------------------------------------- */
+/* Individual compensation — the most sensitive values here                    */
+/* -------------------------------------------------------------------------- */
+
+export const CFG_MEC_PARTNERSHIP_QUOTA = num(
+  process.env.NEXT_PUBLIC_MEC_PARTNERSHIP_QUOTA,
+);
+export const CFG_MEC_REVENUE_PER_STAFF_MIN = num(
+  process.env.NEXT_PUBLIC_MEC_REVENUE_PER_STAFF_MIN,
+);
+export const CFG_MEC_REVENUE_PER_STAFF_MAX = num(
+  process.env.NEXT_PUBLIC_MEC_REVENUE_PER_STAFF_MAX,
+);
+export const CFG_LIFESTYLE_MONTHLY_FEE = num(
+  process.env.NEXT_PUBLIC_LIFESTYLE_MONTHLY_FEE,
+);
+
+/** Ops Admin Associate deliverable rate card. */
+export const CFG_RATE_EDM = num(process.env.NEXT_PUBLIC_RATE_EDM);
+export const CFG_RATE_FB_EVENT = num(process.env.NEXT_PUBLIC_RATE_FB_EVENT);
+export const CFG_RATE_CEC_PROFILE = num(
+  process.env.NEXT_PUBLIC_RATE_CEC_PROFILE,
+);
+export const CFG_RATE_DIGITAL_ACCESS = num(
+  process.env.NEXT_PUBLIC_RATE_DIGITAL_ACCESS,
+);
