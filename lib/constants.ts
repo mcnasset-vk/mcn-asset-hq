@@ -9,6 +9,8 @@ import type {
   MecRecordStatus,
   MecStreamGroup,
   MecStreamKey,
+  MicanaStage,
+  MicanaTenantStatus,
   ModuleKey,
   NasdaqStatus,
   PartnershipFocusArea,
@@ -461,6 +463,119 @@ export const MCN_SUBSIDIARIES = [
 ];
 
 /* -------------------------------------------------------------------------- */
+/* Micana — an operating business, deliberately outside the RM20M raise        */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * The owner's default cut of a bungalow's net profit, as a percentage.
+ * Micana funds the renovation and runs the house, so the majority share sits
+ * with Micana. This is only a default — every bungalow carries its own.
+ */
+export const MICANA_DEFAULT_OWNER_SHARE_PCT = 30;
+
+/** kWh of aircon included in the rent each month, before billing starts. */
+export const MICANA_DEFAULT_AIRCON_ALLOWANCE_KWH = 100;
+
+/** RM per kWh charged above the allowance. */
+export const MICANA_DEFAULT_AIRCON_RATE = 0.6;
+
+/**
+ * A renovation is only flagged once it is over budget by more than this
+ * fraction. Every fit-out runs a little over; flagging at the first ringgit
+ * would make the warning meaningless.
+ */
+export const MICANA_OVERRUN_TOLERANCE = 0.05;
+
+/** Sourcing ladder in order. The funnel and `micanaStageRank` both read this. */
+export const MICANA_STAGES: {
+  key: MicanaStage;
+  label: string;
+  short: string;
+  hint: string;
+  tone: Tone;
+}[] = [
+  {
+    key: "identified",
+    label: "Identified",
+    short: "Identified",
+    hint: "Bungalow spotted, owner not yet approached",
+    tone: "idle",
+  },
+  {
+    key: "negotiating",
+    label: "In Negotiation",
+    short: "Negotiating",
+    hint: "Terms under discussion with the owner",
+    tone: "risk",
+  },
+  {
+    key: "agreed",
+    label: "Terms Agreed",
+    short: "Agreed",
+    hint: "Lease or profit-share signed",
+    tone: "committed",
+  },
+  {
+    key: "renovating",
+    label: "Under Renovation",
+    short: "Renovating",
+    hint: "Fit-out in progress against budget",
+    tone: "accent",
+  },
+  {
+    key: "operating",
+    label: "Operating",
+    short: "Operating",
+    hint: "Taking tenants and generating revenue",
+    tone: "received",
+  },
+];
+
+export const MICANA_TENANT_STATUSES: {
+  key: MicanaTenantStatus;
+  label: string;
+  hint: string;
+  tone: Tone;
+}[] = [
+  {
+    key: "enquiry",
+    label: "Enquiry",
+    hint: "Viewing arranged, nothing signed",
+    tone: "idle",
+  },
+  {
+    key: "reserved",
+    label: "Reserved",
+    hint: "Deposit taken, not yet moved in",
+    tone: "committed",
+  },
+  {
+    key: "occupied",
+    label: "Occupied",
+    hint: "In residence and paying rent",
+    tone: "received",
+  },
+  {
+    key: "notice",
+    label: "Under Notice",
+    hint: "Move-out date set — the room needs refilling",
+    tone: "risk",
+  },
+  {
+    key: "moved_out",
+    label: "Moved Out",
+    hint: "Room vacant",
+    tone: "idle",
+  },
+];
+
+/** Tenant statuses that count as a filled room for occupancy. */
+export const MICANA_OCCUPYING_STATUSES: MicanaTenantStatus[] = [
+  "occupied",
+  "notice",
+];
+
+/* -------------------------------------------------------------------------- */
 /* Labels                                                                      */
 /* -------------------------------------------------------------------------- */
 
@@ -470,6 +585,7 @@ export const MODULE_LABELS: Record<ModuleKey, string> = {
   nasdaq: "Nasdaq Listing M&A",
   commissions: "Introducer Commissions",
   mec: "MEC Asset (HR)",
+  micana: "Micana Co-Living & HealthTech",
 };
 
 /**
@@ -494,6 +610,7 @@ export const MODULE_HREF: Record<ModuleKey, string> = {
   nasdaq: "/nasdaq",
   commissions: "/commissions",
   mec: "/mec",
+  micana: "/micana",
 };
 
 /** Pipeline stages in order. `FactoryFunnel` and `stageRank` both read this. */

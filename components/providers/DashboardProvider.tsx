@@ -43,7 +43,10 @@ export function DashboardProvider({
           MDNA_DIVISION.includes(module) &&
           (profile.businessLine === null ||
             profile.businessLine === module)) ||
-        (profile.role === "mec" && module === "mec"),
+        (profile.role === "mec" && module === "mec") ||
+        // Micana is its own division, like mec: the role grants its own
+        // module and nothing else, and never holds a business line.
+        (profile.role === "micana" && module === "micana"),
     }),
     [data, now, profile],
   );

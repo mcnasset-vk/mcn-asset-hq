@@ -26,6 +26,7 @@ const ROLE_TONE = {
   super_admin: "accent",
   mdna: "received",
   mec: "committed",
+  micana: "accent",
   pending: "idle",
 } as const;
 

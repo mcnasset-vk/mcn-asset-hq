@@ -58,6 +58,19 @@ export const IconShield = (p: IconProps) => (
   </Icon>
 );
 
+export const IconBolt = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M13 3 5.5 13.5H11l-1 7.5 7.5-10.5H12l1-7.5Z" />
+  </Icon>
+);
+
+export const IconHome = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M4 10.5 12 4l8 6.5V20a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-9.5Z" />
+    <path d="M9.5 21v-6h5v6" />
+  </Icon>
+);
+
 export const IconBriefcase = (p: IconProps) => (
   <Icon {...p}>
     <rect x="2.5" y="7" width="19" height="13.5" rx="2" />

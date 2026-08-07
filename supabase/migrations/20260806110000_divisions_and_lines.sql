@@ -161,10 +161,44 @@ comment on function private.can_access(text) is
   'dashboard rather than restricting rows.';
 
 /* -------------------------------------------------------------------------- */
+/* New-user trigger                                                            */
+/* -------------------------------------------------------------------------- */
+-- handle_new_user still inserted into `module`, which no longer exists after
+-- the rename above, so every auth.users insert raised and rolled back: no user
+-- could be created at all. The column is dropped from the insert rather than
+-- renamed, because business_line is nullable and the old code was explicitly
+-- writing null into it — naming it buys nothing and breaks on the next rename.
+
+create or replace function private.handle_new_user()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  insert into public.profiles (id, full_name, email, role)
+  values (
+    new.id,
+    coalesce(new.raw_user_meta_data ->> 'full_name', ''),
+    new.email,
+    'pending'
+  )
+  on conflict (id) do nothing;
+  return new;
+end;
+$$;
+
+/* -------------------------------------------------------------------------- */
 /* Role assignment helper                                                      */
 /* -------------------------------------------------------------------------- */
 
 drop function if exists private.assign_job_title(text, text);
+
+-- The third parameter is renamed new_module -> new_line, and CREATE OR REPLACE
+-- cannot rename a parameter: it fails with "cannot change name of input
+-- parameter". Dropping first is the only way. Safe to drop — assign_role is
+-- deliberately never granted to a client role, so nothing depends on it.
+drop function if exists private.assign_role(text, text, text);
 
 create or replace function private.assign_role(
   user_email    text,

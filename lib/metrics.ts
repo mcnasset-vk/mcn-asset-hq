@@ -5,10 +5,10 @@ import {
   DELIVERABLE_CATEGORIES,
   EVENT_SUPPORT_STATUSES,
   FACTORY_HQ_INVESTMENT,
-  LIFESTYLE_MONTHLY_FEE,
   FACTORY_STAGES,
   FUNDRAISING_DEADLINE,
   FUNDRAISING_TARGET,
+  LIFESTYLE_MONTHLY_FEE,
   MDNA_HQ_INVESTMENT,
   MDNA_STATUSES,
   MEC_ANNUAL_TARGET,
@@ -25,13 +25,23 @@ import {
   MEC_STREAMS,
   MEC_TARGET_YEAR,
   MEC_UPWARD_RATE,
+  MICANA_OCCUPYING_STATUSES,
+  MICANA_OVERRUN_TOLERANCE,
+  MICANA_STAGES,
+  MICANA_TENANT_STATUSES,
   NASDAQ_COMMITTED_STATUSES,
   NASDAQ_PAT_TARGET,
   NASDAQ_STATUSES,
   PARTNERSHIP_FOCUS_AREAS,
   PARTNERSHIP_STATUSES,
 } from "./constants";
-import { clamp01, daysBetween, daysRemaining, ratio } from "./format";
+import {
+  clamp01,
+  daysBetween,
+  daysRemaining,
+  formatRM,
+  ratio,
+} from "./format";
 import type { DashboardData } from "./data";
 import type {
   CecChampion,
@@ -51,6 +61,12 @@ import type {
   MecRecordStatus,
   MecStreamGroup,
   MecStreamKey,
+  MicanaAirconReading,
+  MicanaBungalow,
+  MicanaOwnerPayout,
+  MicanaStage,
+  MicanaTenant,
+  MicanaTenantStatus,
   NasdaqCompany,
   NasdaqStatus,
   PartnershipFocusArea,
@@ -970,6 +986,435 @@ export function getDeliverableSummary(
   };
 }
 
+const MICANA_STAGE_ORDER: MicanaStage[] = MICANA_STAGES.map((s) => s.key);
+
+export function micanaStageRank(stage: MicanaStage): number {
+  return MICANA_STAGE_ORDER.indexOf(stage);
+}
+
+/** Left the programme. Kept off the stage ladder so the funnel stays honest. */
+export function isBungalowExited(bungalow: MicanaBungalow): boolean {
+  return bungalow.exitedAt !== null;
+}
+
+/** Taking tenants right now. Exited bungalows never count. */
+export function isBungalowOperating(bungalow: MicanaBungalow): boolean {
+  return bungalow.stage === "operating" && !isBungalowExited(bungalow);
+}
+
+/**
+ * Over budget by more than the tolerance. Every fit-out runs a little over,
+ * so flagging at the first ringgit would make the warning meaningless.
+ */
+export function isRenovationOverrun(bungalow: MicanaBungalow): boolean {
+  if (bungalow.renovationBudget <= 0) return false;
+  return (
+    bungalow.renovationVariance >
+    bungalow.renovationBudget * MICANA_OVERRUN_TOLERANCE
+  );
+}
+
+/** Past its target completion date with no completion recorded. */
+export function isRenovationLate(
+  bungalow: MicanaBungalow,
+  now: string,
+): boolean {
+  if (bungalow.actualCompletionAt || !bungalow.targetCompletionAt) return false;
+  if (isBungalowExited(bungalow)) return false;
+  return daysBetween(bungalow.targetCompletionAt, now) > 0;
+}
+
+export function renovationLateDays(
+  bungalow: MicanaBungalow,
+  now: string,
+): number {
+  if (!bungalow.targetCompletionAt) return 0;
+  return Math.max(0, daysBetween(bungalow.targetCompletionAt, now));
+}
+
+/** A room with someone in it. Under-notice still counts until they leave. */
+export function isTenantOccupying(tenant: MicanaTenant): boolean {
+  return MICANA_OCCUPYING_STATUSES.includes(tenant.status);
+}
+
+export function isPayoutOverdue(
+  payout: MicanaOwnerPayout,
+  now: string,
+): boolean {
+  return payout.status === "accrued" && daysBetween(payout.dueAt, now) > 0;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Sourcing pipeline                                                           */
+/* -------------------------------------------------------------------------- */
+
+export interface MicanaStageBucket {
+  key: MicanaStage;
+  label: string;
+  short: string;
+  hint: string;
+  tone: Tone;
+  bungalows: MicanaBungalow[];
+  count: number;
+  /**
+   * Bungalows that reached this stage *or beyond*, so the funnel narrows
+   * monotonically — the same reasoning as the factory funnel.
+   */
+  reachedCount: number;
+  roomCount: number;
+  renovationBudget: number;
+}
+
+export function getMicanaStages(data: DashboardData): MicanaStageBucket[] {
+  const live = data.bungalows.filter((b) => !isBungalowExited(b));
+  return MICANA_STAGES.map((stage) => {
+    const bungalows = live.filter((b) => b.stage === stage.key);
+    const reached = live.filter(
+      (b) => micanaStageRank(b.stage) >= micanaStageRank(stage.key),
+    );
+    return {
+      ...stage,
+      bungalows,
+      count: bungalows.length,
+      reachedCount: reached.length,
+      roomCount: sum(bungalows, (b) => b.roomCount),
+      renovationBudget: sum(bungalows, (b) => b.renovationBudget),
+    };
+  });
+}
+
+/* -------------------------------------------------------------------------- */
+/* Renovation                                                                  */
+/* -------------------------------------------------------------------------- */
+
+export interface MicanaRenovationSummary {
+  budget: number;
+  actual: number;
+  /** Positive means overspent across the portfolio. */
+  variance: number;
+  overrunBungalows: MicanaBungalow[];
+  /** Ringgit over budget, counting only the bungalows that are over. */
+  overrunAmount: number;
+  lateBungalows: MicanaBungalow[];
+  completedCount: number;
+  inProgressCount: number;
+  /** Share of started renovations that are within tolerance. */
+  onBudgetPct: number;
+  /** Bungalows with a renovation budget or spend — the rows worth drawing. */
+  active: MicanaBungalow[];
+}
+
+export function getMicanaRenovationSummary(
+  data: DashboardData,
+  now: string,
+): MicanaRenovationSummary {
+  const active = data.bungalows.filter(
+    (b) =>
+      !isBungalowExited(b) &&
+      (b.renovationBudget > 0 ||
+        b.renovationActual > 0 ||
+        b.renovationStartedAt !== null),
+  );
+  const overrun = active.filter(isRenovationOverrun);
+  const started = active.filter((b) => b.renovationStartedAt !== null);
+
+  return {
+    budget: sum(active, (b) => b.renovationBudget),
+    actual: sum(active, (b) => b.renovationActual),
+    variance: sum(active, (b) => b.renovationVariance),
+    overrunBungalows: overrun,
+    overrunAmount: sum(overrun, (b) => b.renovationVariance),
+    lateBungalows: active.filter((b) => isRenovationLate(b, now)),
+    completedCount: active.filter((b) => b.actualCompletionAt !== null).length,
+    inProgressCount: started.filter((b) => b.actualCompletionAt === null).length,
+    onBudgetPct: clamp01(
+      ratio(started.length - overrun.length, started.length),
+    ),
+    active,
+  };
+}
+
+/* -------------------------------------------------------------------------- */
+/* Tenancy and occupancy                                                       */
+/* -------------------------------------------------------------------------- */
+
+export interface MicanaTenantBucket {
+  key: MicanaTenantStatus;
+  label: string;
+  hint: string;
+  tone: Tone;
+  tenants: MicanaTenant[];
+  count: number;
+  rentValue: number;
+}
+
+export interface MicanaOccupancySummary {
+  buckets: MicanaTenantBucket[];
+  /** Lettable rooms across operating bungalows. */
+  totalRooms: number;
+  occupiedRooms: number;
+  vacantRooms: number;
+  occupancyPct: number;
+  /** Contracted monthly rent of everyone currently in residence. */
+  monthlyRentRoll: number;
+  /** What the rent roll would be at full occupancy, at today's average rent. */
+  rentRollAtFull: number;
+  totalTenants: number;
+  /** Rooms whose tenant has given notice — the refill queue. */
+  underNotice: number;
+}
+
+export function getMicanaOccupancy(
+  data: DashboardData,
+): MicanaOccupancySummary {
+  const buckets: MicanaTenantBucket[] = MICANA_TENANT_STATUSES.map((status) => {
+    const tenants = data.tenants.filter((t) => t.status === status.key);
+    return {
+      ...status,
+      tenants,
+      count: tenants.length,
+      rentValue: sum(tenants, (t) => t.monthlyRent),
+    };
+  });
+
+  const occupying = data.tenants.filter(isTenantOccupying);
+  const totalRooms = sum(
+    data.bungalows.filter(isBungalowOperating),
+    (b) => b.roomCount,
+  );
+  const occupiedRooms = occupying.length;
+  const monthlyRentRoll = sum(occupying, (t) => t.monthlyRent);
+  const averageRent = ratio(monthlyRentRoll, occupiedRooms);
+
+  return {
+    buckets,
+    totalRooms,
+    occupiedRooms,
+    // A room count that has drifted below the tenant count should not render
+    // as negative vacancy.
+    vacantRooms: Math.max(0, totalRooms - occupiedRooms),
+    occupancyPct: clamp01(ratio(occupiedRooms, totalRooms)),
+    monthlyRentRoll,
+    rentRollAtFull: averageRent * totalRooms,
+    totalTenants: data.tenants.length,
+    underNotice: data.tenants.filter((t) => t.status === "notice").length,
+  };
+}
+
+/* -------------------------------------------------------------------------- */
+/* Aircon — the IoT tie-in                                                     */
+/* -------------------------------------------------------------------------- */
+
+export interface MicanaAirconSummary {
+  /** The month the headline figures describe. */
+  month: string | null;
+  monthLabel: string;
+  hoursRun: number;
+  kwhUsed: number;
+  billableKwh: number;
+  billedAmount: number;
+  readingCount: number;
+  /** Readings that came from a device rather than being typed in. */
+  iotCount: number;
+  byBungalow: {
+    bungalowId: string;
+    bungalowName: string;
+    kwhUsed: number;
+    billableKwh: number;
+    billedAmount: number;
+    readingCount: number;
+  }[];
+  byMonth: {
+    month: string;
+    label: string;
+    kwhUsed: number;
+    billableKwh: number;
+    billedAmount: number;
+  }[];
+  /** Rooms over their allowance this month, worst first. */
+  overAllowance: MicanaAirconReading[];
+}
+
+/**
+ * Aircon usage. Pass a month (YYYY-MM-01) to scope the headline; omit it and
+ * the most recent month with readings is used.
+ */
+export function getMicanaAirconSummary(
+  data: DashboardData,
+  month?: string,
+): MicanaAirconSummary {
+  const all = data.airconReadings;
+
+  const months = [...new Set(all.map((r) => r.periodMonth))].sort();
+  const target = month ?? months[months.length - 1] ?? null;
+  const scoped = target ? all.filter((r) => r.periodMonth === target) : [];
+
+  const byBungalow = new Map<
+    string,
+    MicanaAirconSummary["byBungalow"][number]
+  >();
+  for (const reading of scoped) {
+    const entry = byBungalow.get(reading.bungalowId) ?? {
+      bungalowId: reading.bungalowId,
+      bungalowName: reading.bungalowName || "—",
+      kwhUsed: 0,
+      billableKwh: 0,
+      billedAmount: 0,
+      readingCount: 0,
+    };
+    entry.kwhUsed += reading.kwhUsed;
+    entry.billableKwh += reading.billableKwh;
+    entry.billedAmount += reading.billedAmount;
+    entry.readingCount += 1;
+    byBungalow.set(reading.bungalowId, entry);
+  }
+
+  return {
+    month: target,
+    monthLabel: target ? monthLabel(target) : "No readings yet",
+    hoursRun: sum(scoped, (r) => r.hoursRun),
+    kwhUsed: sum(scoped, (r) => r.kwhUsed),
+    billableKwh: sum(scoped, (r) => r.billableKwh),
+    billedAmount: sum(scoped, (r) => r.billedAmount),
+    readingCount: scoped.length,
+    iotCount: scoped.filter((r) => r.source === "iot").length,
+    byBungalow: [...byBungalow.values()].sort(
+      (a, b) => b.billedAmount - a.billedAmount,
+    ),
+    byMonth: months.map((m) => {
+      const rows = all.filter((r) => r.periodMonth === m);
+      return {
+        month: m,
+        label: monthLabel(m),
+        kwhUsed: sum(rows, (r) => r.kwhUsed),
+        billableKwh: sum(rows, (r) => r.billableKwh),
+        billedAmount: sum(rows, (r) => r.billedAmount),
+      };
+    }),
+    overAllowance: scoped
+      .filter((r) => r.billableKwh > 0)
+      .sort((a, b) => b.billedAmount - a.billedAmount),
+  };
+}
+
+/** "Jun 2026" — same en-MY convention as the capital trend chart. */
+function monthLabel(month: string): string {
+  const d = new Date(`${month.slice(0, 7)}-01T00:00:00Z`);
+  if (Number.isNaN(d.getTime())) return month;
+  return d.toLocaleString("en-MY", {
+    month: "short",
+    year: "numeric",
+    timeZone: "UTC",
+  });
+}
+
+/* -------------------------------------------------------------------------- */
+/* Owner profit share — a liability, shaped like the commission ledger         */
+/* -------------------------------------------------------------------------- */
+
+export interface MicanaPayoutSummary {
+  accrued: number;
+  paid: number;
+  lifetime: number;
+  accruedCount: number;
+  paidCount: number;
+  overdue: MicanaOwnerPayout[];
+  overdueAmount: number;
+  byOwner: {
+    name: string;
+    phone: string;
+    bungalowName: string;
+    accrued: number;
+    paid: number;
+    count: number;
+  }[];
+}
+
+export function getMicanaPayoutSummary(
+  data: DashboardData,
+  now: string,
+): MicanaPayoutSummary {
+  const accruedRows = data.ownerPayouts.filter((p) => p.status === "accrued");
+  const paidRows = data.ownerPayouts.filter((p) => p.status === "paid");
+  const overdue = accruedRows.filter((p) => isPayoutOverdue(p, now));
+
+  const map = new Map<string, MicanaPayoutSummary["byOwner"][number]>();
+  for (const row of data.ownerPayouts) {
+    const entry = map.get(row.ownerName) ?? {
+      name: row.ownerName,
+      phone: row.ownerPhone,
+      bungalowName: row.bungalowName,
+      accrued: 0,
+      paid: 0,
+      count: 0,
+    };
+    if (row.status === "paid") entry.paid += row.ownerAmount;
+    else entry.accrued += row.ownerAmount;
+    entry.count += 1;
+    map.set(row.ownerName, entry);
+  }
+
+  return {
+    accrued: sum(accruedRows, (p) => p.ownerAmount),
+    paid: sum(paidRows, (p) => p.ownerAmount),
+    lifetime: sum(data.ownerPayouts, (p) => p.ownerAmount),
+    accruedCount: accruedRows.length,
+    paidCount: paidRows.length,
+    overdue,
+    overdueAmount: sum(overdue, (p) => p.ownerAmount),
+    byOwner: [...map.values()].sort((a, b) => b.accrued - a.accrued),
+  };
+}
+
+/* -------------------------------------------------------------------------- */
+/* The Micana scorecard — the module headline                                  */
+/* -------------------------------------------------------------------------- */
+
+export interface MicanaScorecard {
+  bungalowsSourced: number;
+  bungalowsOperating: number;
+  bungalowsExited: number;
+  /** Everything ledgered to date, across every month. */
+  grossRevenue: number;
+  opex: number;
+  netProfit: number;
+  /** Total owed to owners under the profit share. */
+  ownerShare: number;
+  /** What Micana keeps. Negative in a loss month — owners are never charged. */
+  micanaRetained: number;
+  /** Renovation actually spent across the portfolio. */
+  capexToDate: number;
+  /** Aircon billed on across every month recorded. */
+  airconBilled: number;
+  occupancyPct: number;
+  monthlyRentRoll: number;
+  monthsLedgered: number;
+}
+
+export function getMicanaScorecard(data: DashboardData): MicanaScorecard {
+  const occupancy = getMicanaOccupancy(data);
+  const grossRevenue = sum(data.ownerPayouts, (p) => p.grossRevenue);
+  const opex = sum(data.ownerPayouts, (p) => p.opex);
+  const netProfit = sum(data.ownerPayouts, (p) => p.netProfit);
+  const ownerShare = sum(data.ownerPayouts, (p) => p.ownerAmount);
+
+  return {
+    bungalowsSourced: data.bungalows.length,
+    bungalowsOperating: data.bungalows.filter(isBungalowOperating).length,
+    bungalowsExited: data.bungalows.filter(isBungalowExited).length,
+    grossRevenue,
+    opex,
+    netProfit,
+    ownerShare,
+    micanaRetained: netProfit - ownerShare,
+    capexToDate: sum(data.bungalows, (b) => b.renovationActual),
+    airconBilled: sum(data.airconReadings, (r) => r.billedAmount),
+    occupancyPct: occupancy.occupancyPct,
+    monthlyRentRoll: occupancy.monthlyRentRoll,
+    monthsLedgered: new Set(data.ownerPayouts.map((p) => p.periodMonth)).size,
+  };
+}
+
 /* -------------------------------------------------------------------------- */
 /* Introducer commissions — a liability, not revenue                          */
 /* -------------------------------------------------------------------------- */
@@ -1240,6 +1685,175 @@ export function mecRows(records: MecRecord[]): DrillRow[] {
           ? "Pipeline only — not yet counted as committed MEC revenue"
           : record.status === "lost"
             ? "Dropped — excluded from every MEC total"
+            : undefined,
+    };
+  });
+}
+
+const MICANA_TONE: Record<MicanaStage, Tone> = {
+  identified: "idle",
+  negotiating: "risk",
+  agreed: "committed",
+  renovating: "accent",
+  operating: "received",
+};
+
+export function bungalowRows(
+  bungalows: MicanaBungalow[],
+  now: string,
+): DrillRow[] {
+  return bungalows.map((bungalow) => {
+    const stage = MICANA_STAGES.find((s) => s.key === bungalow.stage)!;
+    const exited = isBungalowExited(bungalow);
+    const overrun = isRenovationOverrun(bungalow);
+    const late = isRenovationLate(bungalow, now);
+
+    const flags: string[] = [];
+    if (overrun) {
+      flags.push(
+        `${formatRM(bungalow.renovationVariance)} over the renovation budget`,
+      );
+    }
+    if (late) {
+      flags.push(
+        `${renovationLateDays(bungalow, now)} days past target completion`,
+      );
+    }
+
+    return {
+      id: bungalow.id,
+      name: bungalow.bungalowName,
+      subtitle: `${bungalow.ownerName} · ${bungalow.roomCount} rooms · owner takes ${bungalow.ownerSharePct}%`,
+      phone: bungalow.ownerPhone,
+      // The renovation is the money on a bungalow row; rent and profit have
+      // their own tables and their own drill-downs.
+      amount: bungalow.renovationActual || bungalow.renovationBudget,
+      amountLabel: bungalow.renovationActual ? "spent" : "budgeted",
+      statusLabel: exited ? "Exited" : stage.label,
+      statusTone: exited
+        ? "idle"
+        : overrun || late
+          ? "stalled"
+          : MICANA_TONE[bungalow.stage],
+      date:
+        bungalow.exitedAt ??
+        bungalow.operatingSince ??
+        bungalow.actualCompletionAt ??
+        bungalow.renovationStartedAt ??
+        bungalow.agreedAt ??
+        bungalow.identifiedAt,
+      dateLabel: bungalow.exitedAt
+        ? "Exited"
+        : bungalow.operatingSince
+          ? "Operating since"
+          : bungalow.actualCompletionAt
+            ? "Renovation done"
+            : bungalow.renovationStartedAt
+              ? "Renovating since"
+              : bungalow.agreedAt
+                ? "Agreed"
+                : "Identified",
+      documents: bungalow.documents,
+      flag: flags.length > 0 ? flags.join(" · ") : undefined,
+    };
+  });
+}
+
+const MICANA_TENANT_TONE: Record<MicanaTenantStatus, Tone> = {
+  enquiry: "idle",
+  reserved: "committed",
+  occupied: "received",
+  notice: "risk",
+  moved_out: "idle",
+};
+
+export function micanaTenantRows(tenants: MicanaTenant[]): DrillRow[] {
+  return tenants.map((tenant) => {
+    const status = MICANA_TENANT_STATUSES.find((s) => s.key === tenant.status)!;
+    return {
+      id: tenant.id,
+      name: tenant.tenantName,
+      subtitle: `${tenant.bungalowName || "—"} · ${tenant.roomLabel}`,
+      phone: tenant.phone,
+      amount: tenant.monthlyRent,
+      amountLabel: "per month",
+      statusLabel: status.label,
+      statusTone: MICANA_TENANT_TONE[tenant.status],
+      date: tenant.movedOutAt ?? tenant.movedInAt,
+      dateLabel: tenant.movedOutAt
+        ? "Moved out"
+        : tenant.movedInAt
+          ? "Moved in"
+          : "No date",
+      documents: tenant.documents,
+      flag:
+        tenant.status === "notice"
+          ? "Under notice — this room needs refilling"
+          : undefined,
+    };
+  });
+}
+
+/**
+ * A reading stores the tenant id but not their number, so the tenancies are
+ * passed in to resolve it — the drill-down table calls straight from the row.
+ */
+export function airconRows(
+  readings: MicanaAirconReading[],
+  tenants: MicanaTenant[],
+): DrillRow[] {
+  const phones = new Map(tenants.map((t) => [t.id, t.phone]));
+  return readings.map((reading) => ({
+    id: reading.id,
+    name: reading.tenantName || `${reading.roomLabel} (vacant)`,
+    subtitle: `${reading.bungalowName || "—"} · ${reading.roomLabel} · ${monthLabel(reading.periodMonth)}`,
+    phone: (reading.tenantId ? phones.get(reading.tenantId) : "") ?? "",
+    amount: reading.billedAmount,
+    amountLabel: `${reading.kwhUsed} kWh · ${reading.hoursRun} h`,
+    statusLabel:
+      reading.billableKwh > 0 ? "Above allowance" : "Within allowance",
+    statusTone: reading.billableKwh > 0 ? "risk" : "received",
+    date: reading.periodMonth,
+    dateLabel: "Period",
+    documents: reading.documents,
+    flag:
+      reading.billableKwh > 0
+        ? `${reading.billableKwh} kWh over the ${reading.allowanceKwh} kWh allowance at RM ${reading.ratePerKwh}/kWh`
+        : undefined,
+  }));
+}
+
+export function ownerPayoutRows(
+  payouts: MicanaOwnerPayout[],
+  now: string,
+): DrillRow[] {
+  return payouts.map((payout) => {
+    const overdueDays =
+      payout.status === "accrued"
+        ? Math.max(0, daysBetween(payout.dueAt, now))
+        : 0;
+    return {
+      id: payout.id,
+      name: payout.ownerName || "—",
+      subtitle: `${payout.bungalowName || "—"} · ${monthLabel(payout.periodMonth)} · ${payout.ownerSharePct}% of net profit`,
+      phone: payout.ownerPhone,
+      amount: payout.ownerAmount,
+      amountLabel: payout.status === "paid" ? "paid" : "payable",
+      statusLabel: payout.status === "paid" ? "Paid" : "Accrued",
+      statusTone:
+        payout.status === "paid"
+          ? "received"
+          : overdueDays > 0
+            ? "stalled"
+            : "risk",
+      date: payout.paidAt ?? payout.dueAt,
+      dateLabel: payout.paidAt ? "Paid" : "Due",
+      documents: payout.documents,
+      flag:
+        overdueDays > 0
+          ? `${overdueDays} days overdue`
+          : payout.netProfit < 0
+            ? "Loss month — nothing payable to the owner, the loss stays with Micana"
             : undefined,
     };
   });

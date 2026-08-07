@@ -15,12 +15,13 @@
  * sees that division; `businessLine` optionally narrows them to a single line
  * inside it.
  */
-export type Role = "super_admin" | "mdna" | "mec" | "pending";
+export type Role = "super_admin" | "mdna" | "mec" | "micana" | "pending";
 
 export const ROLE_LABELS: Record<Role, string> = {
   super_admin: "Super admin",
   mdna: "MDNA",
   mec: "MEC",
+  micana: "Micana",
   pending: "Pending",
 };
 
@@ -33,7 +34,8 @@ export type ModuleKey =
   | "mdna"
   | "nasdaq"
   | "commissions"
-  | "mec";
+  | "mec"
+  | "micana";
 
 /**
  * A role *within* a module. It decides which dashboard renders and nothing
@@ -422,6 +424,144 @@ export interface OpsSyncLog {
   ownerId: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Micana Innovation Co-Living & HealthTech                                    */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * The bungalow sourcing ladder. Order matters — `micanaStageRank` in
+ * metrics.ts relies on this exact sequence.
+ *
+ * Leaving the programme is `exitedAt`, not a stage, so the funnel narrows
+ * monotonically instead of dipping when a bungalow is handed back.
+ */
+export type MicanaStage =
+  | "identified"   // Spotted, owner not yet approached
+  | "negotiating"  // Terms under discussion
+  | "agreed"       // Lease or profit-share signed
+  | "renovating"   // Fit-out underway against budget
+  | "operating";   // Taking tenants and generating revenue
+
+export interface MicanaBungalow {
+  id: string;
+  bungalowName: string;
+  address: string;
+  ownerName: string;
+  ownerPhone: string;
+  sourcedBy: string;
+  stage: MicanaStage;
+  identifiedAt: string;
+  negotiationStartedAt: string | null;
+  agreedAt: string | null;
+  /** Set when the bungalow leaves the programme. Not a stage — see above. */
+  exitedAt: string | null;
+  renovationStartedAt: string | null;
+  /** Past this date with no completion = a late renovation. */
+  targetCompletionAt: string | null;
+  actualCompletionAt: string | null;
+  renovationBudget: number;
+  renovationActual: number;
+  /** Generated in Postgres: actual − budget. Positive means overspent. */
+  renovationVariance: number;
+  contractor: string;
+  /** Lettable rooms. The denominator of the occupancy figure. */
+  roomCount: number;
+  operatingSince: string | null;
+  /** The owner's cut of net profit, as a percentage. */
+  ownerSharePct: number;
+  defaultAirconAllowanceKwh: number;
+  defaultAirconRatePerKwh: number;
+  documents: DocumentRef[];
+  notes?: string;
+}
+
+export type MicanaTenantStatus =
+  | "enquiry"    // Viewing arranged, nothing signed
+  | "reserved"   // Deposit taken, not yet moved in
+  | "occupied"   // In residence and paying rent
+  | "notice"     // Move-out date set — the room needs refilling
+  | "moved_out"; // Room vacant
+
+export interface MicanaTenant {
+  id: string;
+  bungalowId: string;
+  /** Denormalised in Postgres so the ledger stands alone. See lib/data.ts. */
+  bungalowName: string;
+  tenantName: string;
+  phone: string;
+  roomLabel: string;
+  status: MicanaTenantStatus;
+  monthlyRent: number;
+  deposit: number;
+  /** null = inherit the bungalow's house allowance. */
+  airconAllowanceKwh: number | null;
+  movedInAt: string | null;
+  movedOutAt: string | null;
+  documents: DocumentRef[];
+  notes?: string;
+}
+
+/**
+ * One aircon meter reading, per room per month.
+ *
+ * `allowanceKwh` and `ratePerKwh` are snapshots taken when the reading landed,
+ * so raising the house rate later never rewrites an old bill.
+ */
+export interface MicanaAirconReading {
+  id: string;
+  bungalowId: string;
+  bungalowName: string;
+  /** null when the room was empty that month. */
+  tenantId: string | null;
+  tenantName: string;
+  roomLabel: string;
+  /** First of the month, YYYY-MM-01. */
+  periodMonth: string;
+  hoursRun: number;
+  kwhUsed: number;
+  allowanceKwh: number;
+  ratePerKwh: number;
+  /** Generated in Postgres: kWh above the allowance. */
+  billableKwh: number;
+  /** Generated in Postgres: billableKwh × ratePerKwh. */
+  billedAmount: number;
+  /** How the reading arrived — a device, or typed in. */
+  source: "manual" | "iot";
+  deviceId: string;
+  documents: DocumentRef[];
+  notes?: string;
+}
+
+export type MicanaPayoutStatus = "accrued" | "paid";
+
+/**
+ * A month of profit sharing with one bungalow owner.
+ *
+ * `netProfit`, `ownerAmount` and `ownerSharePct` are owned by the database —
+ * the split can never be hand-typed, in the same way a commission cannot.
+ */
+export interface MicanaOwnerPayout {
+  id: string;
+  bungalowId: string;
+  bungalowName: string;
+  ownerName: string;
+  ownerPhone: string;
+  periodMonth: string;
+  grossRevenue: number;
+  opex: number;
+  /** Snapshotted on insert, so renegotiating never re-splits a settled month. */
+  ownerSharePct: number;
+  /** Generated in Postgres: gross − opex. Can be negative. */
+  netProfit: number;
+  /** Generated in Postgres. A loss month pays the owner nothing. */
+  ownerAmount: number;
+  status: MicanaPayoutStatus;
+  dueAt: string;
+  paidAt: string | null;
+  documents: DocumentRef[];
+  notes?: string;
 }
 
 /* -------------------------------------------------------------------------- */

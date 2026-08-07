@@ -14,6 +14,10 @@ import type {
   LifestyleInvoice,
   MdnaMember,
   MecRecord,
+  MicanaAirconReading,
+  MicanaBungalow,
+  MicanaOwnerPayout,
+  MicanaTenant,
   NasdaqCompany,
   PartnershipInitiative,
   SynergyLog,
@@ -46,6 +50,11 @@ export interface DashboardData {
   /** Ops Admin deliverable log and sync notes. */
   deliverables: Deliverable[];
   syncLogs: OpsSyncLog[];
+  /** Micana co-living. Its own division, outside the RM20M raise. */
+  bungalows: MicanaBungalow[];
+  tenants: MicanaTenant[];
+  airconReadings: MicanaAirconReading[];
+  ownerPayouts: MicanaOwnerPayout[];
 }
 
 export const EMPTY_DATA: DashboardData = {
@@ -63,6 +72,10 @@ export const EMPTY_DATA: DashboardData = {
   invoices: [],
   deliverables: [],
   syncLogs: [],
+  bungalows: [],
+  tenants: [],
+  airconReadings: [],
+  ownerPayouts: [],
 };
 
 /* -------------------------------------------------------------------------- */
@@ -110,6 +123,10 @@ export async function getDashboardData(): Promise<DashboardData> {
     invoices,
     deliverables,
     syncLogs,
+    bungalows,
+    tenants,
+    readings,
+    payouts,
     documents,
   ] = await Promise.all([
     supabase.from("factory_deals").select("*").order("submitted_at"),
@@ -126,6 +143,10 @@ export async function getDashboardData(): Promise<DashboardData> {
     supabase.from("lifestyle_invoices").select("*").order("period_month"),
     supabase.from("deliverables").select("*").order("occurred_on"),
     supabase.from("ops_sync_logs").select("*").order("week_of"),
+    supabase.from("micana_bungalows").select("*").order("bungalow_name"),
+    supabase.from("micana_tenants").select("*").order("tenant_name"),
+    supabase.from("micana_aircon_readings").select("*").order("period_month"),
+    supabase.from("micana_owner_payouts").select("*").order("due_at"),
     supabase.from("documents").select("*").order("uploaded_at"),
   ]);
 
@@ -151,6 +172,12 @@ export async function getDashboardData(): Promise<DashboardData> {
     invoices: (invoices.data ?? []).map(mapInvoice),
     deliverables: (deliverables.data ?? []).map(mapDeliverable),
     syncLogs: (syncLogs.data ?? []).map(mapSyncLog),
+    bungalows: (bungalows.data ?? []).map((row) => mapBungalow(row, docs)),
+    tenants: (tenants.data ?? []).map((row) => mapMicanaTenant(row, docs)),
+    airconReadings: (readings.data ?? []).map((row) =>
+      mapAirconReading(row, docs),
+    ),
+    ownerPayouts: (payouts.data ?? []).map((row) => mapOwnerPayout(row, docs)),
   };
 }
 
@@ -427,6 +454,117 @@ function mapSynergyLog(row: Record<string, unknown>): SynergyLog {
     ownerId: (row.owner_id as string) ?? null,
     createdAt: row.created_at as string,
     updatedAt: row.updated_at as string,
+  };
+}
+
+function mapBungalow(
+  row: Record<string, unknown>,
+  docs: Map<string, DocumentRef[]>,
+): MicanaBungalow {
+  const id = row.id as string;
+  return {
+    id,
+    bungalowName: row.bungalow_name as string,
+    address: (row.address as string) ?? "",
+    ownerName: row.owner_name as string,
+    ownerPhone: (row.owner_phone as string) ?? "",
+    sourcedBy: (row.sourced_by as string) ?? "",
+    stage: row.stage as MicanaBungalow["stage"],
+    identifiedAt: row.identified_at as string,
+    negotiationStartedAt: (row.negotiation_started_at as string) ?? null,
+    agreedAt: (row.agreed_at as string) ?? null,
+    exitedAt: (row.exited_at as string) ?? null,
+    renovationStartedAt: (row.renovation_started_at as string) ?? null,
+    targetCompletionAt: (row.target_completion_at as string) ?? null,
+    actualCompletionAt: (row.actual_completion_at as string) ?? null,
+    renovationBudget: n(row.renovation_budget),
+    renovationActual: n(row.renovation_actual),
+    renovationVariance: n(row.renovation_variance),
+    contractor: (row.contractor as string) ?? "",
+    roomCount: n(row.room_count),
+    operatingSince: (row.operating_since as string) ?? null,
+    ownerSharePct: n(row.owner_share_pct),
+    defaultAirconAllowanceKwh: n(row.default_aircon_allowance_kwh),
+    defaultAirconRatePerKwh: n(row.default_aircon_rate_per_kwh),
+    documents: docs.get(id) ?? [],
+    notes: (row.notes as string) ?? undefined,
+  };
+}
+
+function mapMicanaTenant(
+  row: Record<string, unknown>,
+  docs: Map<string, DocumentRef[]>,
+): MicanaTenant {
+  const id = row.id as string;
+  const allowance = row.aircon_allowance_kwh;
+  return {
+    id,
+    bungalowId: row.bungalow_id as string,
+    bungalowName: (row.bungalow_name as string) ?? "",
+    tenantName: row.tenant_name as string,
+    phone: (row.phone as string) ?? "",
+    roomLabel: row.room_label as string,
+    status: row.status as MicanaTenant["status"],
+    monthlyRent: n(row.monthly_rent),
+    deposit: n(row.deposit),
+    // null is meaningful here — it means "inherit the house allowance" — so
+    // this one deliberately does not go through n().
+    airconAllowanceKwh: allowance == null ? null : Number(allowance),
+    movedInAt: (row.moved_in_at as string) ?? null,
+    movedOutAt: (row.moved_out_at as string) ?? null,
+    documents: docs.get(id) ?? [],
+    notes: (row.notes as string) ?? undefined,
+  };
+}
+
+function mapAirconReading(
+  row: Record<string, unknown>,
+  docs: Map<string, DocumentRef[]>,
+): MicanaAirconReading {
+  const id = row.id as string;
+  return {
+    id,
+    bungalowId: row.bungalow_id as string,
+    bungalowName: (row.bungalow_name as string) ?? "",
+    tenantId: (row.tenant_id as string) ?? null,
+    tenantName: (row.tenant_name as string) ?? "",
+    roomLabel: row.room_label as string,
+    periodMonth: row.period_month as string,
+    hoursRun: n(row.hours_run),
+    kwhUsed: n(row.kwh_used),
+    allowanceKwh: n(row.allowance_kwh),
+    ratePerKwh: n(row.rate_per_kwh),
+    billableKwh: n(row.billable_kwh),
+    billedAmount: n(row.billed_amount),
+    source: row.source as MicanaAirconReading["source"],
+    deviceId: (row.device_id as string) ?? "",
+    documents: docs.get(id) ?? [],
+    notes: (row.notes as string) ?? undefined,
+  };
+}
+
+function mapOwnerPayout(
+  row: Record<string, unknown>,
+  docs: Map<string, DocumentRef[]>,
+): MicanaOwnerPayout {
+  const id = row.id as string;
+  return {
+    id,
+    bungalowId: row.bungalow_id as string,
+    bungalowName: (row.bungalow_name as string) ?? "",
+    ownerName: (row.owner_name as string) ?? "",
+    ownerPhone: (row.owner_phone as string) ?? "",
+    periodMonth: row.period_month as string,
+    grossRevenue: n(row.gross_revenue),
+    opex: n(row.opex),
+    ownerSharePct: n(row.owner_share_pct),
+    netProfit: n(row.net_profit),
+    ownerAmount: n(row.owner_amount),
+    status: row.status as MicanaOwnerPayout["status"],
+    dueAt: row.due_at as string,
+    paidAt: (row.paid_at as string) ?? null,
+    documents: docs.get(id) ?? [],
+    notes: (row.notes as string) ?? undefined,
   };
 }
 

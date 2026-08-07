@@ -580,3 +580,200 @@ function describe(message: string): string {
   }
   return message;
 }
+
+/** Meter and ledger periods are stored as the first of the month. */
+const monthOr = (v: FormDataEntryValue | null, fallback: string) => {
+  const s = str(v);
+  return /^\d{4}-\d{2}/.test(s) ? `${s.slice(0, 7)}-01` : fallback;
+};
+
+const thisMonth = () => `${new Date().toISOString().slice(0, 7)}-01`;
+
+export async function saveMicanaBungalow(
+  _prev: FormState,
+  formData: FormData,
+): Promise<FormState> {
+  const id = orNull(formData.get("id"));
+  const bungalowName = str(formData.get("bungalow_name"));
+  if (!bungalowName) return { error: "Bungalow name is required." };
+
+  const ownerName = str(formData.get("owner_name"));
+  if (!ownerName) return { error: "Owner name is required." };
+
+  const stage = str(formData.get("stage")) || "identified";
+  const order = ["identified", "negotiating", "agreed", "renovating", "operating"];
+  const reached = (key: string) => order.indexOf(stage) >= order.indexOf(key);
+
+  const payload = {
+    bungalow_name: bungalowName,
+    address: str(formData.get("address")),
+    owner_name: ownerName,
+    owner_phone: str(formData.get("owner_phone")),
+    sourced_by: str(formData.get("sourced_by")),
+    stage,
+    identified_at: orNull(formData.get("identified_at")) ?? undefined,
+    // Clearing a date is how a stage gets corrected backwards, so the dates
+    // are kept consistent with the stage — the same discipline as a factory.
+    negotiation_started_at: reached("negotiating")
+      ? orNull(formData.get("negotiation_started_at"))
+      : null,
+    agreed_at: reached("agreed") ? orNull(formData.get("agreed_at")) : null,
+    renovation_started_at: reached("renovating")
+      ? orNull(formData.get("renovation_started_at"))
+      : null,
+    target_completion_at: orNull(formData.get("target_completion_at")),
+    actual_completion_at: orNull(formData.get("actual_completion_at")),
+    operating_since:
+      stage === "operating" ? orNull(formData.get("operating_since")) : null,
+    // Exiting is independent of the stage ladder, so it is never cleared here.
+    exited_at: orNull(formData.get("exited_at")),
+    renovation_budget: numOr(formData.get("renovation_budget"), 0),
+    renovation_actual: numOr(formData.get("renovation_actual"), 0),
+    contractor: str(formData.get("contractor")),
+    room_count: numOr(formData.get("room_count"), 0),
+    owner_share_pct: numOr(formData.get("owner_share_pct"), 30),
+    default_aircon_allowance_kwh: numOr(
+      formData.get("default_aircon_allowance_kwh"),
+      100,
+    ),
+    default_aircon_rate_per_kwh: numOr(
+      formData.get("default_aircon_rate_per_kwh"),
+      0.6,
+    ),
+    notes: orNull(formData.get("notes")),
+  };
+
+  const supabase = await createClient();
+  const { error } = id
+    ? await supabase.from("micana_bungalows").update(payload).eq("id", id)
+    : await supabase.from("micana_bungalows").insert(payload);
+
+  if (error) return { error: describe(error.message) };
+  refresh();
+  return { ok: true };
+}
+
+export async function saveMicanaTenant(
+  _prev: FormState,
+  formData: FormData,
+): Promise<FormState> {
+  const id = orNull(formData.get("id"));
+  const tenantName = str(formData.get("tenant_name"));
+  if (!tenantName) return { error: "Tenant name is required." };
+
+  const bungalowId = orNull(formData.get("bungalow_id"));
+  if (!bungalowId) return { error: "Choose which bungalow this room is in." };
+
+  const roomLabel = str(formData.get("room_label"));
+  if (!roomLabel) return { error: "Room is required." };
+
+  const status = str(formData.get("status")) || "enquiry";
+  const allowance = str(formData.get("aircon_allowance_kwh"));
+
+  const payload = {
+    bungalow_id: bungalowId,
+    tenant_name: tenantName,
+    phone: str(formData.get("phone")),
+    room_label: roomLabel,
+    status,
+    monthly_rent: numOr(formData.get("monthly_rent"), 0),
+    deposit: numOr(formData.get("deposit"), 0),
+    // Blank means "inherit the bungalow's house allowance", which is a null,
+    // not a zero — a zero would bill the tenant from the first kWh.
+    aircon_allowance_kwh:
+      allowance === "" ? null : numOr(formData.get("aircon_allowance_kwh"), 0),
+    moved_in_at:
+      status === "enquiry" ? null : orNull(formData.get("moved_in_at")),
+    moved_out_at:
+      status === "moved_out" ? orNull(formData.get("moved_out_at")) : null,
+    notes: orNull(formData.get("notes")),
+  };
+
+  const supabase = await createClient();
+  const { error } = id
+    ? await supabase.from("micana_tenants").update(payload).eq("id", id)
+    : await supabase.from("micana_tenants").insert(payload);
+
+  if (error) return { error: describe(error.message) };
+  refresh();
+  return { ok: true };
+}
+
+export async function saveAirconReading(
+  _prev: FormState,
+  formData: FormData,
+): Promise<FormState> {
+  const id = orNull(formData.get("id"));
+  const bungalowId = orNull(formData.get("bungalow_id"));
+  if (!bungalowId) return { error: "Choose which bungalow this meter is in." };
+
+  const roomLabel = str(formData.get("room_label"));
+  if (!roomLabel) return { error: "Room is required." };
+
+  const payload = {
+    bungalow_id: bungalowId,
+    tenant_id: orNull(formData.get("tenant_id")),
+    room_label: roomLabel,
+    period_month: monthOr(formData.get("period_month"), thisMonth()),
+    hours_run: numOr(formData.get("hours_run"), 0),
+    kwh_used: numOr(formData.get("kwh_used"), 0),
+    // Typed in through this form; the ingest endpoint writes 'iot'.
+    source: "manual",
+    notes: orNull(formData.get("notes")),
+  };
+
+  const supabase = await createClient();
+  const { error } = id
+    ? await supabase.from("micana_aircon_readings").update(payload).eq("id", id)
+    : await supabase.from("micana_aircon_readings").insert(payload);
+
+  if (error) return { error: describe(error.message) };
+  refresh();
+  return { ok: true };
+}
+
+export async function saveMicanaPayout(
+  _prev: FormState,
+  formData: FormData,
+): Promise<FormState> {
+  const id = orNull(formData.get("id"));
+  const bungalowId = orNull(formData.get("bungalow_id"));
+  if (!bungalowId) return { error: "Choose which bungalow this month is for." };
+
+  const payload = {
+    bungalow_id: bungalowId,
+    period_month: monthOr(formData.get("period_month"), thisMonth()),
+    gross_revenue: numOr(formData.get("gross_revenue"), 0),
+    opex: numOr(formData.get("opex"), 0),
+    notes: orNull(formData.get("notes")),
+  };
+
+  const supabase = await createClient();
+  const { error } = id
+    ? await supabase.from("micana_owner_payouts").update(payload).eq("id", id)
+    : await supabase.from("micana_owner_payouts").insert(payload);
+
+  if (error) return { error: describe(error.message) };
+  refresh();
+  return { ok: true };
+}
+
+/** Settle or un-settle an owner's monthly profit share. */
+export async function setPayoutPaid(
+  payoutId: string,
+  paid: boolean,
+): Promise<FormState> {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("micana_owner_payouts")
+    .update(
+      paid
+        ? { status: "paid", paid_at: new Date().toISOString().slice(0, 10) }
+        : { status: "accrued", paid_at: null },
+    )
+    .eq("id", payoutId);
+
+  if (error) return { error: describe(error.message) };
+  refresh();
+  return { ok: true };
+}

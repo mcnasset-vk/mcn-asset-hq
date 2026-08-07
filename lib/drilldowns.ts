@@ -2,17 +2,22 @@ import {
   FACTORY_STAGES,
   MDNA_STATUSES,
   MEC_ANNUAL_TARGET,
+  MEC_PAT_MARGIN,
   MEC_POOL_RATE,
   MEC_STATUSES,
   MEC_STREAMS,
   MEC_TARGET_YEAR,
   MEC_UPWARD_RATE,
-  MEC_PAT_MARGIN,
+  MICANA_STAGES,
+  MICANA_TENANT_STATUSES,
   NASDAQ_STATUSES,
 } from "./constants";
 import {
+  airconRows,
+  bungalowRows,
   commissionRows,
   factoryRows,
+  isBungalowExited,
   isFactoryCommitted,
   isFactoryReceived,
   isFactoryStalled,
@@ -21,9 +26,15 @@ import {
   isMecCommitted,
   isMecLive,
   isMecReceived,
+  isPayoutOverdue,
+  isRenovationLate,
+  isRenovationOverrun,
+  isTenantOccupying,
   mdnaRows,
   mecRows,
+  micanaTenantRows,
   nasdaqRows,
+  ownerPayoutRows,
 } from "./metrics";
 import type { DashboardData } from "./data";
 import type {
@@ -34,6 +45,8 @@ import type {
   MecRecordStatus,
   MecStreamGroup,
   MecStreamKey,
+  MicanaStage,
+  MicanaTenantStatus,
   NasdaqStatus,
 } from "./types";
 
@@ -390,6 +403,262 @@ export function mecDerivedDrill(
     total: total(rows),
     totalLabel: `${rows.length} paid records`,
     amountHeader: meta.header,
+    rows,
+  };
+}
+
+/* -------------------------------------------------------------------------- */
+/* Micana — bungalows                                                          */
+/* -------------------------------------------------------------------------- */
+
+export function micanaStageDrill(
+  data: DashboardData,
+  stage: MicanaStage,
+  now: string,
+): DrillDownContent {
+  const meta = MICANA_STAGES.find((s) => s.key === stage)!;
+  const bungalows = data.bungalows.filter(
+    (b) => b.stage === stage && !isBungalowExited(b),
+  );
+  const rows = bungalowRows(bungalows, now);
+  return {
+    title: `Micana — ${meta.label}`,
+    subtitle: meta.hint,
+    total: total(rows),
+    totalLabel: `${rows.length} ${rows.length === 1 ? "bungalow" : "bungalows"} · renovation value`,
+    amountHeader: "Renovation (RM)",
+    rows,
+  };
+}
+
+export function allBungalowsDrill(
+  data: DashboardData,
+  now: string,
+): DrillDownContent {
+  const rows = bungalowRows(data.bungalows, now);
+  return {
+    title: "Micana — All Bungalows",
+    subtitle:
+      "Every bungalow in the programme, from first sighting through renovation to operating. Amounts are renovation spend, not capital.",
+    total: total(rows),
+    totalLabel: `${rows.length} bungalows`,
+    amountHeader: "Renovation (RM)",
+    rows,
+  };
+}
+
+export function renovationOverrunDrill(
+  data: DashboardData,
+  now: string,
+): DrillDownContent {
+  const rows = bungalowRows(
+    data.bungalows.filter((b) => !isBungalowExited(b) && isRenovationOverrun(b)),
+    now,
+  );
+  return {
+    title: "Renovations Over Budget",
+    subtitle:
+      "Bungalows whose fit-out has run more than 5% past its budget. The amount shown is what has actually been spent.",
+    total: total(rows),
+    totalLabel: `${rows.length} over budget`,
+    amountHeader: "Spent (RM)",
+    rows,
+  };
+}
+
+export function renovationLateDrill(
+  data: DashboardData,
+  now: string,
+): DrillDownContent {
+  const rows = bungalowRows(
+    data.bungalows.filter((b) => isRenovationLate(b, now)),
+    now,
+  );
+  return {
+    title: "Renovations Past Target",
+    subtitle:
+      "Fit-outs past their target completion date with no completion recorded. Every week here is a week of rent not being earned.",
+    total: total(rows),
+    totalLabel: `${rows.length} running late`,
+    amountHeader: "Spent (RM)",
+    rows,
+  };
+}
+
+/* -------------------------------------------------------------------------- */
+/* Micana — tenants                                                            */
+/* -------------------------------------------------------------------------- */
+
+export function micanaTenantStatusDrill(
+  data: DashboardData,
+  status: MicanaTenantStatus,
+): DrillDownContent {
+  const meta = MICANA_TENANT_STATUSES.find((s) => s.key === status)!;
+  const rows = micanaTenantRows(
+    data.tenants.filter((t) => t.status === status),
+  );
+  return {
+    title: `Micana Tenants — ${meta.label}`,
+    subtitle: meta.hint,
+    total: total(rows),
+    totalLabel: `${rows.length} ${rows.length === 1 ? "tenant" : "tenants"} · monthly rent`,
+    amountHeader: "Monthly Rent (RM)",
+    rows,
+  };
+}
+
+export function micanaTenantDrill(
+  data: DashboardData,
+  filter: "all" | "occupying" | "vacating" | "pipeline",
+): DrillDownContent {
+  const source = data.tenants.filter((t) => {
+    if (filter === "all") return true;
+    if (filter === "occupying") return isTenantOccupying(t);
+    if (filter === "vacating") return t.status === "notice";
+    return t.status === "enquiry" || t.status === "reserved";
+  });
+  const rows = micanaTenantRows(source);
+
+  const titles = {
+    all: "Micana Tenants — All",
+    occupying: "Rooms Currently Filled",
+    vacating: "Rooms Needing a Refill",
+    pipeline: "Tenant Pipeline",
+  } as const;
+
+  const subtitles = {
+    all: "Every tenancy on record, across every bungalow.",
+    occupying:
+      "Tenants in residence, including those under notice — the rooms earning rent today.",
+    vacating:
+      "Tenants who have given notice. These rooms come empty unless they are refilled.",
+    pipeline: "Enquiries and reservations that have not yet moved in.",
+  } as const;
+
+  return {
+    title: titles[filter],
+    subtitle: subtitles[filter],
+    total: total(rows),
+    totalLabel: `${rows.length} ${rows.length === 1 ? "tenant" : "tenants"} · monthly rent`,
+    amountHeader: "Monthly Rent (RM)",
+    rows,
+  };
+}
+
+export function bungalowTenantsDrill(
+  data: DashboardData,
+  bungalowId: string,
+): DrillDownContent {
+  const bungalow = data.bungalows.find((b) => b.id === bungalowId);
+  const rows = micanaTenantRows(
+    data.tenants.filter((t) => t.bungalowId === bungalowId),
+  );
+  return {
+    title: `Tenants — ${bungalow?.bungalowName ?? "Bungalow"}`,
+    subtitle: `${bungalow?.roomCount ?? 0} lettable rooms. Every tenancy recorded against this bungalow.`,
+    total: total(rows),
+    totalLabel: `${rows.length} ${rows.length === 1 ? "tenancy" : "tenancies"}`,
+    amountHeader: "Monthly Rent (RM)",
+    rows,
+  };
+}
+
+/* -------------------------------------------------------------------------- */
+/* Micana — aircon                                                             */
+/* -------------------------------------------------------------------------- */
+
+export function airconDrill(
+  data: DashboardData,
+  filter: "all" | "billable",
+  month?: string,
+): DrillDownContent {
+  const source = data.airconReadings.filter((r) => {
+    if (month && r.periodMonth !== month) return false;
+    return filter === "all" || r.billableKwh > 0;
+  });
+  const rows = airconRows(source, data.tenants);
+  return {
+    title:
+      filter === "billable" ? "Aircon Above Allowance" : "Aircon Meter Readings",
+    subtitle:
+      "kWh above the included allowance is billed on to the tenant at the bungalow's rate. The allowance and rate are snapshotted when each reading lands, so changing house policy never rewrites an old bill.",
+    total: total(rows),
+    totalLabel: `${rows.length} ${rows.length === 1 ? "reading" : "readings"}`,
+    amountHeader: "Billed (RM)",
+    rows,
+  };
+}
+
+export function bungalowAirconDrill(
+  data: DashboardData,
+  bungalowId: string,
+  month?: string,
+): DrillDownContent {
+  const bungalow = data.bungalows.find((b) => b.id === bungalowId);
+  const source = data.airconReadings.filter(
+    (r) => r.bungalowId === bungalowId && (!month || r.periodMonth === month),
+  );
+  const rows = airconRows(source, data.tenants);
+  return {
+    title: `Aircon — ${bungalow?.bungalowName ?? "Bungalow"}`,
+    subtitle: `Included allowance ${bungalow?.defaultAirconAllowanceKwh ?? 0} kWh per room per month, charged at RM ${bungalow?.defaultAirconRatePerKwh ?? 0} per kWh above it.`,
+    total: total(rows),
+    totalLabel: `${rows.length} ${rows.length === 1 ? "reading" : "readings"}`,
+    amountHeader: "Billed (RM)",
+    rows,
+  };
+}
+
+/* -------------------------------------------------------------------------- */
+/* Micana — owner profit share                                                 */
+/* -------------------------------------------------------------------------- */
+
+export function micanaPayoutDrill(
+  data: DashboardData,
+  filter: "all" | "accrued" | "paid" | "overdue",
+  now: string,
+): DrillDownContent {
+  const source = data.ownerPayouts.filter((p) => {
+    if (filter === "all") return true;
+    if (filter === "paid") return p.status === "paid";
+    if (filter === "accrued") return p.status === "accrued";
+    return isPayoutOverdue(p, now);
+  });
+  const rows = ownerPayoutRows(source, now);
+
+  const titles = {
+    all: "Owner Profit Share — All",
+    accrued: "Outstanding Owner Payouts",
+    paid: "Owner Payouts Settled",
+    overdue: "Overdue Owner Payouts",
+  } as const;
+
+  return {
+    title: titles[filter],
+    subtitle:
+      "Each bungalow's monthly net profit, split with its owner at the agreed percentage. The split is computed in the database and cannot be entered by hand. A loss month pays the owner nothing.",
+    total: total(rows),
+    totalLabel: `${rows.length} monthly ${rows.length === 1 ? "line" : "lines"}`,
+    amountHeader: "Owner Share (RM)",
+    rows,
+  };
+}
+
+export function ownerPayoutDrill(
+  data: DashboardData,
+  ownerName: string,
+  now: string,
+): DrillDownContent {
+  const rows = ownerPayoutRows(
+    data.ownerPayouts.filter((p) => p.ownerName === ownerName),
+    now,
+  );
+  return {
+    title: `Owner Profit Share — ${ownerName}`,
+    subtitle: "Every month of profit share generated for this owner.",
+    total: total(rows),
+    totalLabel: `${rows.length} monthly lines`,
+    amountHeader: "Owner Share (RM)",
     rows,
   };
 }
