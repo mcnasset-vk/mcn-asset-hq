@@ -1,6 +1,8 @@
 # MCN Asset HQ — Capital & Pipeline Dashboard
 
-Executive dashboard tracking the **RM20,000,000 capital raise (deadline 30 November 2026)**, the Factory Cosif pipeline, MDNA Senior Co-Living packages, the Nasdaq listing M&A programme, and introducer commissions.
+Executive dashboard for the capital raise, the Factory Cosif pipeline, MDNA Admin co-living packages, the Nasdaq listing M&A programme, MEC Asset operations, Micana co-living and introducer commissions.
+
+Every monetary figure — targets, deal sizes, rates and quotas — is read from the environment, never from source. See `.env.example` for the full list and `lib/config.ts` for why.
 
 Live on Supabase: email + password sign-in, per-module access enforced in the database, add/edit forms, and private document storage.
 
@@ -17,7 +19,7 @@ Two environment variables must be set in the Vercel project (Production, Preview
 Two settings that are easy to get wrong:
 
 - **Framework preset must be `Next.js`.** Creating the project with `vercel project add` leaves it unset, and the build then succeeds while every route returns 404 — Vercel runs `next build` but serves the output as plain static files.
-- **Deployment Protection is off.** With Vercel Authentication on, visitors must sign into Vercel *before* reaching the login page, which locks out every CIO. Access control is Supabase auth plus row level security.
+- **Deployment Protection must stay off.** With Vercel Authentication on, visitors are made to sign into Vercel *before* reaching the login page, which locks out every user who does not also hold a Vercel account. Authentication is Supabase auth; authorisation is row level security.
 
 Manual deploy:
 
@@ -47,21 +49,25 @@ Environment: copy `.env.example` to `.env.local` and fill in the project URL and
 
 ## The one rule everything derives from
 
-Only two things count toward the RM20,000,000 target:
+Only two things count toward the capital target:
 
 | Source | Into MCN Asset HQ | Counted as **Committed** when | Counted as **Received** when |
 | --- | --- | --- | --- |
-| Factory Cosif | RM1,000,000 (from the RM4M facility) | stage reaches `RM4M Disbursed` | stage reaches `RM1M Invested` |
-| MDNA Senior Co-Living | RM50,000 (from the RM500k package) | member `Signed` | member `Invested` |
-| Nasdaq M&A | **RM0** | — | — |
-| MEC Asset (HR) | **RM0** | — | — |
+| Factory Cosif | `NEXT_PUBLIC_FACTORY_HQ_INVESTMENT` | stage reaches `Disbursed` | stage reaches `Invested` |
+| MDNA Admin | `NEXT_PUBLIC_MDNA_HQ_INVESTMENT` | member `Signed` | member `Invested` |
+| Nasdaq M&A | **nothing** | — | — |
+| MEC Asset (HR) | **nothing** | — | — |
+| Micana Co-Living | **nothing** | — | — |
 
-Two programmes are tracked against their own targets and contribute nothing to the raise:
+Three programmes are tracked against their own targets and contribute nothing to the raise:
 
-- **Nasdaq M&A** is measured in **profit-after-tax** against RM6,000,000.
-- **MEC Asset (HR)** is measured in **operating revenue** against RM6,690,000 a year, across eight streams. Ten per cent flows upward to MCN and twenty per cent funds the operating and profit-sharing pool, both computed live from actual revenue.
+- **Nasdaq M&A** is measured in **profit-after-tax**, against `NEXT_PUBLIC_NASDAQ_PAT_TARGET`.
+- **MEC Asset (HR)** is measured in **operating revenue** across eight streams, each with its own `NEXT_PUBLIC_MEC_TARGET_*`. A share flows upward to MCN and a further share funds the operating and profit-sharing pool, both computed live from actual revenue.
+- **Micana Co-Living** is measured on its own operating scorecard — rent roll, occupancy, net profit, owner payouts.
 
-Neither PAT nor revenue is capital, so neither touches the RM20M figure — mixing them would overstate the raise.
+None of PAT, revenue or rent roll is capital, so none of them touches the raise figure — mixing them in would overstate it.
+
+`lib/metrics.ts` enforces this structurally: `getCapitalSummary` reads `data.factories` and `data.members` and nothing else. If a figure from another module ever needs to move the headline, that is the one function to change.
 
 `Received` is always a subset of `Committed`. The hatched band on the progress bar is the difference: money committed but not yet in the bank.
 
@@ -73,8 +79,10 @@ There is **no public sign-up**. The super admin creates accounts; everyone else 
 
 | Role | Sees |
 | --- | --- |
-| `super_admin` | Everything — combined RM20M view, all three modules, the commission ledger |
-| `cio` (one module) | Only their own module; lands there on sign-in |
+| `super_admin` | Everything, plus user management |
+| `mdna` | The MDNA division — Factory Cosif, MDNA Admin, Nasdaq M&A and Fees. A `business_line` narrows them to one of those; null means the whole division |
+| `mec` | MEC Asset (HR). Its `business_line` selects which desk dashboard renders, not which rows are visible |
+| `micana` | Micana Co-Living. A division of its own, with no business line |
 | `pending` | Nothing until assigned |
 
 **Creating the first account** — in the Supabase dashboard, *Authentication → Users → Add user*, set your own password, then in the SQL editor:
@@ -83,18 +91,21 @@ There is **no public sign-up**. The super admin creates accounts; everyone else 
 select private.assign_role('you@example.com', 'super_admin');
 ```
 
-**Adding a CIO** — create the user the same way, then:
+**Scoping someone** — create the user the same way, then:
 
 ```sql
-select private.assign_role('serena@example.com', 'cio', 'factory');
--- modules: 'factory' | 'mdna' | 'nasdaq' | 'commissions' | 'mec'
-```
+-- A whole division:
+select private.assign_role('serena@example.com', 'micana');
 
-All five modules are live in the database, so `'mec'` is a valid CIO scope.
+-- One line inside a division:
+select private.assign_role('aziz@example.com', 'mdna', 'factory');
+-- mdna lines: 'mdna' | 'factory' | 'nasdaq' | 'commissions'
+-- mec  lines: 'strategic_partnership' | 'operations_manager' | 'operations_executive'
+```
 
 ### Access is enforced in the database
 
-Every table has row level security. A CIO scoped to `mdna` gets **zero rows** from `factory_deals` even if they call the REST API directly with their own token — the app hiding a menu item is a convenience, not the boundary.
+Every table has row level security, and every policy routes through one predicate: `private.can_access`. A user scoped to `micana` gets **zero rows** from `factory_deals` even calling the REST API directly with their own token — the app hiding a menu item is a convenience, not the boundary.
 
 Helper functions live in a `private` schema so PostgREST cannot expose them as RPC endpoints, and `private.assign_role` is callable only from the SQL editor.
 
@@ -112,7 +123,7 @@ The table supports live search, status filtering, column sorting, CSV export (UT
 
 Each module page has an **Add** button, and every row in the module's main table has **Edit**. Commission lines have **Mark paid** / **Mark unpaid**.
 
-Commissions are never entered by hand. A database trigger creates them from the factory dates: RM5,000 falls due 30 days after the RM4M disbursement, RM5,000 more 30 days after the RM1M reaches HQ. Correcting a stage backwards removes the accrual but never deletes a commission that was genuinely paid.
+Commissions are never entered by hand. A database trigger creates them from the factory dates: one introducer fee falls due 30 days after the disbursement, a second 30 days after the investment reaches HQ. Both the fee and the deal sizes come from the environment. Correcting a stage backwards removes the accrual but never deletes a commission that was genuinely paid.
 
 ---
 
@@ -120,11 +131,14 @@ Commissions are never entered by hand. A database trigger creates them from the 
 
 | Path | What it does |
 | --- | --- |
-| `lib/constants.ts` | Business rules: RM20M target, deadline, RM1M / RM50k / RM5k amounts, stage definitions |
+| `lib/config.ts` | Every commercially sensitive figure, read from the environment. Nothing here has a default |
+| `lib/constants.ts` | Stage and status definitions, module labels and routes; monetary values are re-exported from `lib/config.ts` |
 | `lib/metrics.ts` | **Single source of truth.** Every total, percentage, split and stage count is computed here and nowhere else |
 | `lib/data.ts` | Fetches everything from Supabase in one pass and maps rows to domain types |
 | `lib/drilldowns.ts` | Builds the record sets that open in the slide-over |
 | `lib/supabase/` | Browser client, server client, and the session-refreshing proxy |
+| `supabase/migrations/` | The schema, in order. `supabase db push` applies them |
+| `supabase/tests/run.sh` | Applies every migration to a throwaway local Postgres and asserts the behaviour the DDL cannot show |
 | `app/(dashboard)/` | Authenticated routes; the layout fetches data and profile once |
 | `app/(dashboard)/actions.ts` | Server actions for create/update; authorisation is left to RLS |
 | `app/login/` | Sign-in page and auth actions |
@@ -153,7 +167,7 @@ node scripts/make-sample-docs.mjs
 
 ## Known limitations
 
-- **No audit trail.** Three CIOs have edit rights and there is no change history. Worth adding before these figures are quoted to investors.
+- **No audit trail on the business tables.** Several people hold edit rights and there is no change history for those records. Worth adding before these figures are quoted to investors.
 - No self-service password reset yet — the super admin resets passwords from the Supabase dashboard.
 - Document upload from the UI is not built; files can be placed in the bucket from the Supabase dashboard and referenced in `public.documents`.
 - The pace projection is a straight-line run-rate, not a weighted forecast.

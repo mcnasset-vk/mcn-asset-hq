@@ -59,6 +59,10 @@ export function formatDate(iso: string | null | undefined): string {
 export function daysBetween(from: string | Date, to: string | Date): number {
   const a = toUtcMidnight(from);
   const b = toUtcMidnight(to);
+  // An unconfigured date arrives as "" and yields NaN here. Returning 0 keeps
+  // the same contract as the rest of lib/config: a missing value renders an
+  // honest zero rather than NaN leaking onto the page.
+  if (Number.isNaN(a) || Number.isNaN(b)) return 0;
   return Math.round((b - a) / 86_400_000);
 }
 

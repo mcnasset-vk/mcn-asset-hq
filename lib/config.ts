@@ -18,6 +18,11 @@
  * that the environment is incomplete.
  */
 
+/** ISO date, or "" when unset — formatDate renders "—" and date maths reads 0. */
+function date(raw: string | undefined): string {
+  return raw && /^\d{4}-\d{2}-\d{2}$/.test(raw) ? raw : "";
+}
+
 function num(raw: string | undefined): number {
   const parsed = Number(raw);
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0;
@@ -33,6 +38,13 @@ export const CFG_FUNDRAISING_TARGET = num(
 export const CFG_NASDAQ_PAT_TARGET = num(
   process.env.NEXT_PUBLIC_NASDAQ_PAT_TARGET,
 );
+
+// The deadline is as disclosive as the target: the two together describe the
+// whole raise, so it belongs here rather than in source.
+export const CFG_FUNDRAISING_DEADLINE = date(
+  process.env.NEXT_PUBLIC_FUNDRAISING_DEADLINE,
+);
+export const CFG_CAMPAIGN_START = date(process.env.NEXT_PUBLIC_CAMPAIGN_START);
 
 /* -------------------------------------------------------------------------- */
 /* Deal structures                                                             */

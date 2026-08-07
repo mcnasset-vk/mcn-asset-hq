@@ -18,8 +18,10 @@ import type {
   Tone,
 } from "./types";
 import {
+  CFG_CAMPAIGN_START,
   CFG_FACTORY_DISBURSEMENT,
   CFG_FACTORY_HQ_INVESTMENT,
+  CFG_FUNDRAISING_DEADLINE,
   CFG_FUNDRAISING_TARGET,
   CFG_INTRODUCER_COMMISSION,
   CFG_LIFESTYLE_MONTHLY_FEE,
@@ -49,10 +51,10 @@ import {
 export const FUNDRAISING_TARGET = CFG_FUNDRAISING_TARGET;
 
 /** Hard deadline for the raise. */
-export const FUNDRAISING_DEADLINE = "2026-11-30";
+export const FUNDRAISING_DEADLINE = CFG_FUNDRAISING_DEADLINE;
 
 /** When the raise started — used for the run-rate / pace calculation. */
-export const CAMPAIGN_START = "2026-01-01";
+export const CAMPAIGN_START = CFG_CAMPAIGN_START;
 
 /** Group profit-after-tax required for the Nasdaq listing. */
 export const NASDAQ_PAT_TARGET = CFG_NASDAQ_PAT_TARGET;
