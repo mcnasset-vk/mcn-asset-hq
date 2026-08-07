@@ -10,6 +10,7 @@ import {
   IconChevronRight,
   IconDashboard,
   IconFactory,
+  IconHome,
   IconReceipt,
   IconShield,
   IconTrending,
@@ -92,6 +93,22 @@ const MEC_LINES: NavItem[] = [
   },
 ];
 
+/**
+ * Micana is a third division, a peer of MDNA and MEC. It is an operating
+ * business measured on its own scorecard rather than one of the MDNA lines,
+ * and the database agrees: `private.can_access` grants the micana role its
+ * own module and nothing else, and the mdna arm never reaches it.
+ */
+const MICANA_LINES: NavItem[] = [
+  {
+    href: "/micana",
+    label: "Micana Co-Living",
+    short: "Micana",
+    icon: IconHome,
+    module: "micana",
+  },
+];
+
 /** Super admin only — granting access is not a business line. */
 const ADMIN: NavItem = {
   href: "/admin/users",
@@ -116,6 +133,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   const mdnaLines = MDNA_LINES.filter(visible);
   const mecLines = MEC_LINES.filter(visible);
+  const micanaLines = MICANA_LINES.filter(visible);
 
   // Mobile has no room for a nested tree, so it shows the leaves. Anyone who
   // can see the division gets the summary; a single-line CIO gets their line.
@@ -123,6 +141,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     OVERVIEW,
     ...mdnaLines,
     ...mecLines,
+    ...micanaLines,
     ...(isSuperAdmin ? [ADMIN] : []),
   ].map((item) =>
     canSeeDivision && item.href === "/mdna/admin"
@@ -202,6 +221,21 @@ export function AppShell({ children }: { children: ReactNode }) {
               </p>
               <div className="mt-1 space-y-1 border-l border-line pl-2">
                 {mecLines.map((item) => (
+                  <NavLink key={item.href} item={item} pathname={pathname} />
+                ))}
+              </div>
+            </div>
+          ) : null}
+
+          {micanaLines.length > 0 ? (
+            <div className="pt-3">
+              {/* Same shape as MEC: a heading rather than a link, because
+                  Micana has no division summary page above its module. */}
+              <p className="px-3 py-1.5 text-[0.6875rem] font-semibold uppercase tracking-[0.09em] text-ink-subtle">
+                MICANA
+              </p>
+              <div className="mt-1 space-y-1 border-l border-line pl-2">
+                {micanaLines.map((item) => (
                   <NavLink key={item.href} item={item} pathname={pathname} />
                 ))}
               </div>
